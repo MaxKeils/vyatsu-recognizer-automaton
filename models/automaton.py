@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import List
 from models.transition import Transition
-from enum import Enum
+from models.hint import HintLevel
 
 class _BaseAutomaton(BaseModel):
     """Модель автомата."""
@@ -101,6 +101,7 @@ class StudentAutomaton(_BaseAutomaton):
 
     student_id: str = Field(..., description="Идентификатор студента")
     variant_id: int = Field(..., description="Номер варианта задания", ge=0)
+    hint_level: HintLevel = Field(default=HintLevel.NO_HINTS, description="Уровень подсказок")
 
     model_config = ConfigDict(
         populate_by_name=True,
