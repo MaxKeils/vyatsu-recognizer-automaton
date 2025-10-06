@@ -58,29 +58,36 @@ async def verify_automaton(
     hint_level_int = hint_level_map.get(config.hint_level, 1)
     
     try:
-        # Создаем новый StudentAutomaton с hint_level из конфигурации
-        student_data = student_automaton.model_dump()
-        student_data['hint_level'] = hint_level_int
-        student_automaton_with_hints = StudentAutomaton(**student_data)
-        
-        # Добавляем необходимые поля для ReferenceAutomaton
+        # Создаем ReferenceAutomaton
         reference_data = task.task.copy()
-        
         reference_data['state_codes'] = reference_data.pop('state_codes')
-        
         reference_data['variant'] = student_automaton.variant
         reference_data['description'] = task.description or f"Task {student_automaton.variant}"
         reference_automaton = ReferenceAutomaton(**reference_data)
         
-        # Проверяем автомат с hint_level из конфигурации
-        verification_result = AutomatonService.verify_automaton(
-            student=student_automaton_with_hints,
+        # 1. Проверяем автомат с hint_level из конфигурации (для ответа пользователю)
+        student_data_for_user = student_automaton.model_dump()
+        student_data_for_user['hint_level'] = hint_level_int
+        student_automaton_with_user_hints = StudentAutomaton(**student_data_for_user)
+        
+        verification_result_for_user = AutomatonService.verify_automaton(
+            student=student_automaton_with_user_hints,
+            reference=reference_automaton,
+            test_length=5
+        )
+        
+        # 2. Проверяем автомат с FULL_HINTS (уровень 3) для сохранения в БД
+        student_data_for_db = student_automaton.model_dump()
+        student_data_for_db['hint_level'] = 3  # FULL_HINTS
+        student_automaton_with_full_hints = StudentAutomaton(**student_data_for_db)
+        
+        verification_result_for_db = AutomatonService.verify_automaton(
+            student=student_automaton_with_full_hints,
             reference=reference_automaton,
             test_length=5
         )
         
         # Сохраняем submission в БД
-        # Преобразуем StudentAutomaton в словарь для сохранения
         submitted_task_dict = student_automaton.model_dump()
         
         submission_data = SubmissionRequest(
@@ -90,16 +97,17 @@ async def verify_automaton(
         )
         submission = SubmissionCRUD.create_submission(db, submission_data)
         
-        # Обновляем submission с результатами проверки
+        # Обновляем submission с ПОЛНЫМИ результатами проверки (FULL_HINTS)
         errors_data = {
-            "success": verification_result.success,
-            "message": verification_result.message,
-            "errors": verification_result.errors,
-            "test_sequences_count": verification_result.test_sequences_count
+            "success": verification_result_for_db.success,
+            "message": verification_result_for_db.message,
+            "errors": verification_result_for_db.errors,  # Полная информация
+            "test_sequences_count": verification_result_for_db.test_sequences_count
         }
         SubmissionCRUD.update_submission_errors(db, submission.id, errors_data)
         
-        return verification_result
+        # Возвращаем пользователю результат с его уровнем подсказок
+        return verification_result_for_user
         
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

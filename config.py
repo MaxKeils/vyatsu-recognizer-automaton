@@ -21,7 +21,7 @@ class _Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     
     # База данных (PostgreSQL)
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/automaton"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/automaton?client_encoding=utf8"
 
 _settings_instance = None
 

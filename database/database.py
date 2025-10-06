@@ -2,6 +2,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config import get_settings
+import json
 
 settings = get_settings()
 
@@ -10,7 +11,8 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_size=30,
     max_overflow=20,  
-    echo=settings.debug  
+    echo=settings.debug,
+    json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False)
 )
 
 # Фабрика сессий
