@@ -44,9 +44,9 @@ class AutomatonService():
         transition_map: Dict[Tuple[str, str], Tuple[str, int]] = {}
         
         for trans in transitions:
-            for input_combo in trans.on_inputs:
+            for input_combo in trans.on:
                 key = (trans.from_state, input_combo)
-                transition_map[key] = (trans.to_state, trans.output)
+                transition_map[key] = (trans.to_state, trans.out)
         
         return transition_map
 
@@ -81,9 +81,9 @@ class AutomatonService():
             if student_from is None or student_to is None:
                 continue
             
-            for input_combo in trans.on_inputs:
+            for input_combo in trans.on:
                 key = (student_from, input_combo)
-                student_transitions[key] = (student_to, trans.output)
+                student_transitions[key] = (student_to, trans.out)
         
         return student_transitions
     
@@ -233,11 +233,11 @@ class AutomatonService():
         Returns:
             Кортеж (is_valid, mapping), где mapping = {код_состояния_студента: имя_эталонного_состояния}
         """
-        if len(student.state_codes) != len(reference.states):
+        if len(student.state_codes) != len(reference.state_codes):
             return False, {}
         
         # Пробуем все возможные перестановки
-        for perm in permutations(reference.states):
+        for perm in permutations(reference.state_codes):
             mapping = {student.state_codes[i]: state_name for i, state_name in enumerate(perm)}
             
             if AutomatonService._verify_with_mapping(student, reference, mapping):
@@ -464,8 +464,8 @@ class AutomatonService():
         """
         transitions_with_output_1: Set[Tuple[str, str]] = set()
         for trans in student.transitions:
-            if trans.output == OutputSignal.ONE:
-                for input_combo in trans.on_inputs:
+            if trans.out == OutputSignal.ONE:
+                for input_combo in trans.on:
                     transitions_with_output_1.add((trans.from_state, input_combo))
         return transitions_with_output_1
     
@@ -573,7 +573,7 @@ class AutomatonService():
         diagnostic_mapping = {student.initial_state: reference.initial_state}
 
         student_states_remaining = [code for code in student.state_codes if code != student.initial_state]
-        ref_states_remaining = [s for s in reference.states if s != reference.initial_state]
+        ref_states_remaining = [s for s in reference.state_codes if s != reference.initial_state]
 
         for student_code, ref_state in zip(student_states_remaining, ref_states_remaining):
             diagnostic_mapping[student_code] = ref_state
@@ -706,7 +706,7 @@ class AutomatonService():
         
         # Проверка 5: Сравниваем с эталонным y_equation
         ref_terms = AutomatonService._parse_reference_y_equation(
-            reference.y_equation, reference.states
+            reference.y_equation, reference.state_codes
         )
         
         # Проверка 5a: Количество термов должно совпадать
@@ -778,6 +778,7 @@ class AutomatonService():
                 success=False,
                 message=message,
                 errors=errors_to_show,
+                test_sequences_count=0
             )
         
         # Шаг 2: Генерация тестовых последовательностей
@@ -830,11 +831,14 @@ class AutomatonService():
             if len(error_messages) >= error_limit:
                 break
         
+        test_sequences_count = len(test_sequences)
+        
         if error_messages:
             return VerificationResult(
                 success=False,
                 message="Автомат работает неправильно",
                 errors=error_messages,
+                test_sequences_count=test_sequences_count
             )
         
         # Шаг 4: Проверка канонического уравнения y_equation
@@ -849,11 +853,13 @@ class AutomatonService():
                 success=False,
                 message="Граф автомата верный, но каноническое уравнение неправильное",
                 errors=y_errors,
+                test_sequences_count=test_sequences_count
             )
         
         return VerificationResult(
             success=True,
-            message="Автомат полностью корректен! Граф переходов верный, каноническое уравнение правильное",
+            message="Автомат верный! Все проверки пройдены.",
             state_mapping=state_mapping,
-            errors=[]
+            errors=[],
+            test_sequences_count=test_sequences_count
         )
