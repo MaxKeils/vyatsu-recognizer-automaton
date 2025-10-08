@@ -104,7 +104,7 @@ class _BaseAutomaton(BaseModel):
     
 class StudentAutomaton(_BaseAutomaton):
     student_id: str = Field(..., description="Идентификатор студента")
-    variant: int = Field(..., description="Номер варианта задания", ge=0)
+    variant: int = Field(..., description="Номер виртуального варианта (display_number), который видит студент", ge=0)
     difficulty_mode: DifficultyMode = Field(default=DifficultyMode.HARD_MODE, description="Режим сложности проверки")
 
     model_config = ConfigDict(
@@ -130,7 +130,7 @@ class StudentAutomaton(_BaseAutomaton):
         return self
 
 class ReferenceAutomaton(_BaseAutomaton):
-    variant: int = Field(..., description="Номер варианта задания", ge=0)
+    variant: int = Field(..., description="Номер виртуального варианта (display_number)", ge=0)
     description: str = Field(..., description="Описание варианта задания")
     
     model_config = ConfigDict(

@@ -261,7 +261,7 @@ class SectionVerificationRequest(BaseModel):
             "examples": [
                 {
                     "user_id": 1,
-                    "task_id": 1,
+                    "virtual_variant_id": 1,
                     "section_number": 1,
                     "data": {
                         "state_codes": ["00", "01", "10"],
@@ -270,7 +270,7 @@ class SectionVerificationRequest(BaseModel):
                 },
                 {
                     "user_id": 1,
-                    "task_id": 1,
+                    "virtual_variant_id": 2,
                     "section_number": 2,
                     "data": {
                         "state_codes": ["00", "01"],
@@ -285,7 +285,7 @@ class SectionVerificationRequest(BaseModel):
                 },
                 {
                     "user_id": 1,
-                    "task_id": 1,
+                    "virtual_variant_id": 3,
                     "section_number": 3,
                     "data": {
                         "state_codes": ["00", "01"],
@@ -302,7 +302,7 @@ class SectionVerificationRequest(BaseModel):
     )
     
     user_id: int = Field(..., description="ID пользователя")
-    task_id: int = Field(..., description="ID задания (реальный ID, не номер варианта)")
+    virtual_variant_id: int = Field(..., description="Номер виртуального варианта (display_number), который видит студент")
     section_number: int = Field(..., ge=1, le=3, description="Номер секции: 1 - состояния, 2 - переходы, 3 - y-уравнение")
     data: SectionDataRequest = Field(..., description="Данные автомата для проверки")
 

@@ -297,6 +297,23 @@ class VirtualVariantCRUD:
         return db.query(VirtualVariant).filter(VirtualVariant.display_number == display_number).first()
     
     @staticmethod
+    def get_task_by_virtual_variant(db: Session, display_number: int) -> Optional[Task]:
+        """
+        Получить реальное задание по номеру виртуального варианта.
+        
+        Args:
+            db: Сессия БД
+            display_number: Номер виртуального варианта (который видит студент)
+            
+        Returns:
+            Task или None если виртуальный вариант не найден
+        """
+        virtual_variant = VirtualVariantCRUD.get_virtual_variant_by_display_number(db, display_number)
+        if not virtual_variant:
+            return None
+        return TaskCRUD.get_task_by_id(db, virtual_variant.real_task_id)
+    
+    @staticmethod
     def create_virtual_variant(db: Session, real_task_id: int, display_number: int) -> VirtualVariant:
         """
         Создать виртуальный вариант.

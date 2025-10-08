@@ -26,14 +26,14 @@ async def verify_automaton(
     Проверить автомат студента против эталонного и сохранить результат.
     
     Args:
-        student_automaton: Автомат студента со всеми полями (student_id, variant, state_codes, transitions, y_equation)
+        student_automaton: Автомат студента со всеми полями (student_id, variant - номер виртуального варианта, state_codes, transitions, y_equation)
         db: Сессия БД
         
     Returns:
         Результат проверки со статусом успеха и деталями ошибок
         
     Raises:
-        HTTPException: Если задача или пользователь не найдены
+        HTTPException: Если виртуальный вариант, задача или пользователь не найдены
     """
 
     try:
@@ -45,9 +45,10 @@ async def verify_automaton(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    task = TaskCRUD.get_task_by_id(db, student_automaton.variant)
+    # Получаем реальное задание через виртуальный вариант
+    task = VirtualVariantCRUD.get_task_by_virtual_variant(db, student_automaton.variant)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="Virtual variant not found")
     
     # Получаем difficulty_mode из конфигурации БД
     config = ConfigurationCRUD.get_configuration(db)
@@ -67,7 +68,7 @@ async def verify_automaton(
         reference_data = task.task.copy()
         reference_data['state_codes'] = reference_data.pop('state_codes')
         reference_data['variant'] = student_automaton.variant
-        reference_data['description'] = task.description or f"Task {student_automaton.variant}"
+        reference_data['description'] = task.description or f"Variant {student_automaton.variant}"
         reference_automaton = ReferenceAutomaton(**reference_data)
         
         # 1. Проверяем автомат с difficulty_mode из конфигурации (для ответа пользователю)
@@ -134,14 +135,14 @@ async def verify_section(
     3. Y-уравнение (y) - проверяет выходную функцию
     
     Args:
-        request: Запрос с данными секции
+        request: Запрос с данными секции (включая virtual_variant_id)
         db: Сессия БД
         
     Returns:
         VerificationResult с ошибками и подсказками
         
     Raises:
-        HTTPException: Если пользователь или задание не найдены
+        HTTPException: Если пользователь, виртуальный вариант или задание не найдены
     """
     # Проверяем пользователя
     user = UserCRUD.get_user_by_id(db, request.user_id)
@@ -161,16 +162,16 @@ async def verify_section(
     }
     difficulty_mode_int = difficulty_to_int_map.get(config.difficulty_mode, 1)
     
-    # Получаем задание
-    task = TaskCRUD.get_task_by_id(db, request.task_id)
+    # Получаем реальное задание через виртуальный вариант
+    task = VirtualVariantCRUD.get_task_by_virtual_variant(db, request.virtual_variant_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Задание не найдено")
+        raise HTTPException(status_code=404, detail="Виртуальный вариант не найден")
     
     try:
         # Создаем ReferenceAutomaton из задания
         reference_data = task.task.copy()
-        reference_data['variant'] = request.task_id
-        reference_data['description'] = task.description or f"Task {request.task_id}"
+        reference_data['variant'] = request.virtual_variant_id
+        reference_data['description'] = task.description or f"Variant {request.virtual_variant_id}"
         reference_automaton = ReferenceAutomaton(**reference_data)
         
         # Для разных секций проверяем разные части автомата
@@ -212,7 +213,7 @@ async def verify_section(
             dummy_y = [f"{request.data.state_codes[0]}00"] if request.data.state_codes else ["0000"]
             student_data = {
                 "student_id": str(request.user_id),
-                "variant": request.task_id,
+                "variant": request.virtual_variant_id,
                 "difficulty_mode": difficulty_mode_int,
                 "state_codes": request.data.state_codes or [],
                 "initial_state": request.data.initial_state or "",
@@ -247,7 +248,7 @@ async def verify_section(
             # Создаем полный StudentAutomaton
             student_data = {
                 "student_id": str(request.user_id),
-                "variant": request.task_id,
+                "variant": request.virtual_variant_id,
                 "difficulty_mode": difficulty_mode_int,
                 "state_codes": request.data.state_codes or [],
                 "initial_state": request.data.initial_state or "",

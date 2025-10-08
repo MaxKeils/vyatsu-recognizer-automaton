@@ -54,7 +54,7 @@ def client():
     Base.metadata.create_all(bind=engine)
     app = create_test_app()
     
-    # Setup: Create configuration, task, and user
+    # Setup: Create configuration, task, user, and virtual variant
     with TestingSessionLocal() as db:
         # Create configuration
         config_data = ConfigurationRequest(duration=120, difficulty_mode="MEDIUM_MODE")
@@ -75,7 +75,11 @@ def client():
                 "y": ["S100"]
             }
         )
-        TaskCRUD.create_task(db, task_data)
+        task = TaskCRUD.create_task(db, task_data)
+        
+        # Create virtual variant (display_number=1 -> real_task_id=1)
+        from database.crud import VirtualVariantCRUD
+        VirtualVariantCRUD.create_virtual_variant(db, real_task_id=task.id, display_number=1)
         
         # Create user
         user_data = UserRequest(full_name="Тестовый Студент Иванович", group_name="ИВТ-41")
@@ -94,7 +98,7 @@ class TestAutomatonVerificationRoutes:
         """Test section 1 verification with correct states."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 1,
             "data": {
                 "state_codes": ["00", "01"],
@@ -118,7 +122,7 @@ class TestAutomatonVerificationRoutes:
         """Test section 1 verification with wrong number of states."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 1,
             "data": {
                 "state_codes": ["00", "01", "10"],  # 3 states instead of 2
@@ -138,7 +142,7 @@ class TestAutomatonVerificationRoutes:
         """Test section 2 verification with correct transitions."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 2,
             "data": {
                 "state_codes": ["00", "01"],
@@ -166,7 +170,7 @@ class TestAutomatonVerificationRoutes:
         """Test section 2 verification with wrong transition output."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 2,
             "data": {
                 "state_codes": ["00", "01"],
@@ -194,7 +198,7 @@ class TestAutomatonVerificationRoutes:
         """Test section 3 verification with correct Y equation."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 3,
             "data": {
                 "state_codes": ["00", "01"],
@@ -221,7 +225,7 @@ class TestAutomatonVerificationRoutes:
         """Test section 3 verification with wrong Y equation."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 3,
             "data": {
                 "state_codes": ["00", "01"],
@@ -247,7 +251,7 @@ class TestAutomatonVerificationRoutes:
         """Test verification with invalid section number."""
         section_data = {
             "user_id": 1,
-            "task_id": 1,
+            "virtual_variant_id": 1,
             "section_number": 5,  # Invalid! Only 1-3 allowed
             "data": {
                 "state_codes": ["00", "01"],
