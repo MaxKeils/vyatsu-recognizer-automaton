@@ -1,8 +1,6 @@
-"""CRUD operations for database models."""
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Dict, Any
-from database.models import Configuration, Task, User, Submission, HintLevelEnum
+from database.models import Configuration, Task, User, Submission, StudentProgress, VirtualVariant
 from database.schemas import (
     ConfigurationRequest, TaskRequest, UserRequest, UserUpdateRequest, 
     SubmissionRequest
@@ -22,20 +20,57 @@ class ConfigurationCRUD:
         config = db.query(Configuration).first()
         
         if config:
-            # Update existing
             config.duration = config_data.duration
-            config.hint_level = config_data.hint_level.value
+            config.difficulty_mode = config_data.difficulty_mode.value
         else:
-            # Create new
+            from service.auth_service import AuthService
             config = Configuration(
                 duration=config_data.duration,
-                hint_level=config_data.hint_level.value
+                difficulty_mode=config_data.difficulty_mode.value,
+                password_hash=AuthService.generate_default_password_hash()
             )
             db.add(config)
         
         db.commit()
         db.refresh(config)
         return config
+    
+    @staticmethod
+    def update_password(db: Session, new_password_hash: str) -> Optional[Configuration]:
+        """
+        Обновить пароль администратора в конфигурации.
+        
+        Args:
+            db: Сессия БД
+            new_password_hash: Новый хеш пароля
+            
+        Returns:
+            Обновленная конфигурация или None
+        """
+        config = db.query(Configuration).first()
+        if config:
+            config.password_hash = new_password_hash
+            db.commit()
+            db.refresh(config)
+        return config
+    
+    @staticmethod
+    def verify_admin_password(db: Session, password: str) -> bool:
+        """
+        Проверить пароль администратора.
+        
+        Args:
+            db: Сессия БД
+            password: Пароль для проверки
+            
+        Returns:
+            True если пароль верный, False иначе
+        """
+        from service.auth_service import AuthService
+        config = db.query(Configuration).first()
+        if not config or not config.password_hash:
+            return False
+        return AuthService.verify_password(password, config.password_hash)
 
 
 class TaskCRUD:
@@ -89,28 +124,23 @@ class UserCRUD:
         return db.query(User).filter(User.id == user_id).first()
     
     @staticmethod
-    def get_user_by_email(db: Session, email: str) -> Optional[User]:
-        return db.query(User).filter(User.email == email).first()
+    def get_user_by_full_name(db: Session, full_name: str) -> Optional[User]:
+        return db.query(User).filter(User.full_name == full_name).first()
     
     @staticmethod
-    def create_or_get_user_by_email(db: Session, user_data: UserRequest) -> User:
-        existing_user = UserCRUD.get_user_by_email(db, user_data.email)
+    def create_or_get_user_by_full_name(db: Session, user_data: UserRequest) -> User:
+        existing_user = UserCRUD.get_user_by_full_name(db, user_data.full_name)
         
         if existing_user:
-            # Update full_name if provided
-            if user_data.full_name:
-                existing_user.full_name = user_data.full_name
+            if user_data.group_name:
+                existing_user.group_name = user_data.group_name
                 db.commit()
                 db.refresh(existing_user)
             return existing_user
         
-        # Create new user
-        if not user_data.full_name:
-            raise ValueError("full_name is required for new user")
-            
         user = User(
             full_name=user_data.full_name,
-            email=user_data.email
+            group_name=user_data.group_name
         )
         db.add(user)
         db.commit()
@@ -126,15 +156,8 @@ class UserCRUD:
         if user_data.full_name is not None:
             user.full_name = user_data.full_name
         
-        if user_data.email is not None:
-            # Check if email is already taken by another user
-            existing_user = db.query(User).filter(
-                User.email == user_data.email,
-                User.id != user_id
-            ).first()
-            if existing_user:
-                raise IntegrityError("Email already taken", None, None)
-            user.email = user_data.email
+        if user_data.group_name is not None:
+            user.group_name = user_data.group_name
         
         db.commit()
         db.refresh(user)
@@ -166,7 +189,7 @@ class SubmissionCRUD:
             task_id=submission_data.task_id,
             user_id=submission_data.user_id,
             submitted_task=submission_data.submitted_task,
-            errors=None  # Will be populated by verification service
+            errors=None 
         )
         db.add(submission)
         db.commit()
@@ -190,3 +213,162 @@ class SubmissionCRUD:
     def get_submission_errors(db: Session, submission_id: int) -> Optional[Dict[str, Any]]:
         submission = db.query(Submission).filter(Submission.id == submission_id).first()
         return submission.errors if submission else None
+
+
+class StudentProgressCRUD:
+    """CRUD операции для прогресса студентов."""
+    
+    @staticmethod
+    def get_progress(db: Session, user_id: int, task_id: int) -> Optional[StudentProgress]:
+        return db.query(StudentProgress).filter(
+            StudentProgress.user_id == user_id,
+            StudentProgress.task_id == task_id
+        ).first()
+    
+    @staticmethod
+    def get_user_progress(db: Session, user_id: int) -> List[StudentProgress]:
+        return db.query(StudentProgress).filter(StudentProgress.user_id == user_id).all()
+    
+    @staticmethod
+    def create_progress(
+        db: Session,
+        user_id: int,
+        task_id: int
+    ) -> StudentProgress:
+        progress = StudentProgress(
+            user_id=user_id,
+            task_id=task_id,
+            current_section=1
+        )
+        db.add(progress)
+        db.commit()
+        db.refresh(progress)
+        return progress
+    
+    @staticmethod
+    def update_section_data(
+        db: Session,
+        progress_id: int,
+        section_number: int,
+        section_data: Dict[str, Any]
+    ) -> Optional[StudentProgress]:
+        progress = db.query(StudentProgress).filter(StudentProgress.id == progress_id).first()
+        if not progress:
+            return None
+        
+        if section_number == 1:
+            progress.section_1_data = section_data
+        elif section_number == 2:
+            progress.section_2_data = section_data
+        elif section_number == 3:
+            progress.section_3_data = section_data
+        
+        # Обновляем текущую секцию если она меньше
+        if progress.current_section < section_number:
+            progress.current_section = section_number
+        
+        db.commit()
+        db.refresh(progress)
+        return progress
+    
+    @staticmethod
+    def mark_completed(db: Session, progress_id: int) -> Optional[StudentProgress]:
+        progress = db.query(StudentProgress).filter(StudentProgress.id == progress_id).first()
+        if progress:
+            progress.is_completed = True
+            db.commit()
+            db.refresh(progress)
+        return progress
+
+
+class VirtualVariantCRUD:
+    """CRUD операции для виртуальных вариантов."""
+    
+    @staticmethod
+    def get_all_virtual_variants(db: Session) -> List[VirtualVariant]:
+        return db.query(VirtualVariant).order_by(VirtualVariant.display_number).all()
+    
+    @staticmethod
+    def get_virtual_variant_by_id(db: Session, variant_id: int) -> Optional[VirtualVariant]:
+        return db.query(VirtualVariant).filter(VirtualVariant.id == variant_id).first()
+    
+    @staticmethod
+    def get_virtual_variant_by_display_number(db: Session, display_number: int) -> Optional[VirtualVariant]:
+        return db.query(VirtualVariant).filter(VirtualVariant.display_number == display_number).first()
+    
+    @staticmethod
+    def create_virtual_variant(db: Session, real_task_id: int, display_number: int) -> VirtualVariant:
+        """
+        Создать виртуальный вариант.
+        
+        Args:
+            db: Сессия БД
+            real_task_id: ID реального задания
+            display_number: Номер для отображения
+            
+        Returns:
+            Созданный виртуальный вариант
+            
+        Raises:
+            IntegrityError: Если display_number уже существует
+        """
+        virtual_variant = VirtualVariant(
+            real_task_id=real_task_id,
+            display_number=display_number
+        )
+        db.add(virtual_variant)
+        db.commit()
+        db.refresh(virtual_variant)
+        return virtual_variant
+    
+    @staticmethod
+    def update_virtual_variant(
+        db: Session,
+        variant_id: int,
+        real_task_id: Optional[int] = None,
+        display_number: Optional[int] = None
+    ) -> Optional[VirtualVariant]:
+        """
+        Обновить виртуальный вариант.
+        
+        Args:
+            db: Сессия БД
+            variant_id: ID виртуального варианта
+            real_task_id: Новый ID реального задания (опционально)
+            display_number: Новый номер для отображения (опционально)
+            
+        Returns:
+            Обновленный виртуальный вариант или None если не найден
+        """
+        variant = db.query(VirtualVariant).filter(VirtualVariant.id == variant_id).first()
+        if not variant:
+            return None
+        
+        if real_task_id is not None:
+            variant.real_task_id = real_task_id
+        
+        if display_number is not None:
+            variant.display_number = display_number
+        
+        db.commit()
+        db.refresh(variant)
+        return variant
+    
+    @staticmethod
+    def delete_virtual_variant(db: Session, variant_id: int) -> bool:
+        """
+        Удалить виртуальный вариант.
+        
+        Args:
+            db: Сессия БД
+            variant_id: ID виртуального варианта
+            
+        Returns:
+            True если удален, False если не найден
+        """
+        variant = db.query(VirtualVariant).filter(VirtualVariant.id == variant_id).first()
+        if variant:
+            db.delete(variant)
+            db.commit()
+            return True
+        return False

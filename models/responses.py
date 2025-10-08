@@ -6,17 +6,30 @@ class VerificationResult(BaseModel):
     
     success: bool = Field(..., description="Корректен ли автомат")
     message: str = Field(..., description="Сообщение о результате")
-    errors: List[str] = Field(default_factory=list, description="Список текстовых ошибок")
-    test_sequences_count: int = Field(..., description="Количество проверенных тестовых последовательностей")
-    state_mapping: Optional[dict] = Field(None, description="Отображение кодов студента на эталонные состояния")
+    errors: List[str] = Field(default_factory=list, description="Список ошибок")
+    hints: Optional[List[str]] = Field(None, description="Подсказки для исправления (только в MEDIUM_MODE)")
     
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "success": True,
-                "message": "Автомат верный! Все проверки пройдены.",
-                "errors": [],
-                "test_sequences_count": 32
-            }
+            "examples": [
+                {
+                    "success": True,
+                    "message": "Секция 1 (состояния) проверена успешно",
+                    "errors": [],
+                    "hints": None
+                },
+                {
+                    "success": False,
+                    "message": "Секция 1 содержит ошибки",
+                    "errors": ["Неверное количество состояний: ожидалось 3, получено 4"],
+                    "hints": None
+                },
+                {
+                    "success": False,
+                    "message": "Секция 2 содержит ошибки",
+                    "errors": ["Ошибка на последовательности 'ab': автомат завершился в неверном состоянии"],
+                    "hints": ["Проверьте переход из состояния '0' по символу 'a'"]
+                }
+            ]
         }
     )

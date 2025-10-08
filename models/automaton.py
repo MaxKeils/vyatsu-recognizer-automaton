@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import List
 from models.transition import Transition
-from models.hint import HintLevel
+from models.hint import DifficultyMode
 
 class _BaseAutomaton(BaseModel):
     initial_state: str = Field(..., description="Начальное состояние автомата")
@@ -105,7 +105,7 @@ class _BaseAutomaton(BaseModel):
 class StudentAutomaton(_BaseAutomaton):
     student_id: str = Field(..., description="Идентификатор студента")
     variant: int = Field(..., description="Номер варианта задания", ge=0)
-    hint_level: HintLevel = Field(default=HintLevel.NO_HINTS, description="Уровень подсказок")
+    difficulty_mode: DifficultyMode = Field(default=DifficultyMode.HARD_MODE, description="Режим сложности проверки")
 
     model_config = ConfigDict(
         populate_by_name=True,

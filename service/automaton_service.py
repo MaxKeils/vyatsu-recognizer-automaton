@@ -1,9 +1,8 @@
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Optional, Final
 from models.automaton import Transition, StudentAutomaton, ReferenceAutomaton
 from itertools import product, permutations
-from typing import Final
 from models.transition import OutputSignal
-from models.hint import HintLevel
+from models.hint import DifficultyMode
 from models.responses import VerificationResult
 
 
@@ -247,53 +246,53 @@ class AutomatonService():
     
     @staticmethod
     def _format_missing_transition_error(
-        hint_level: HintLevel,
+        difficulty_mode: DifficultyMode,
         student_state_code: str,
         input_val: str,
         expected_to_code: str,
         expected_output: int
-    ) -> str:
+    ) -> tuple[str, Optional[str]]:
         """
         Форматирует сообщение об ошибке отсутствующего перехода в автомате.
 
         Args:
-            hint_level (HintLevel): Уровень детализации подсказки (без подсказок, легкие подсказки или полные подсказки).
+            difficulty_mode (DifficultyMode): Режим сложности проверки (HARD_MODE, MEDIUM_MODE, EASY_MODE).
             student_state_code (str): Код состояния, из которого отсутствует переход.
             input_val (str): Входное значение, для которого отсутствует переход.
             expected_to_code (str): Ожидаемый код состояния, в которое должен вести переход.
             expected_output (int): Ожидаемое выходное значение для перехода.
 
         Returns:
-            str: Отформатированное сообщение об ошибке с учетом указанного уровня подсказок.
-                - При NO_HINTS: общее сообщение без деталей
-                - При LIGHT_HINTS: сообщение с указанием состояния и входа
-                - При FULL_HINTS: полное сообщение с ожидаемым состоянием и выходом
+            tuple[str, Optional[str]]: (error_message, hint_message)
+                - error_message: текст ошибки (всегда)
+                - hint_message: подсказка (только для MEDIUM_MODE и EASY_MODE)
         """
-        if hint_level == HintLevel.NO_HINTS:
-            return "Отсутствует один или несколько переходов"
-        elif hint_level == HintLevel.LIGHT_HINTS:
-            return f"Отсутствует переход из состояния {student_state_code} при входе {input_val}"
-        else:  # hint_level == HintLevel.FULL_HINTS
-            return (
-                f"Отсутствует переход из состояния {student_state_code} при входе {input_val}. "
-                f"Ожидается: переход в состояние {expected_to_code} с выходом {expected_output}"
-            )
+        error = f"Отсутствует переход из состояния {student_state_code} при входе {input_val}"
+        
+        if difficulty_mode == DifficultyMode.HARD_MODE:
+            return error, None
+        elif difficulty_mode == DifficultyMode.MEDIUM_MODE:
+            hint = "Проверьте таблицу переходов"
+            return error, hint
+        else:  # difficulty_mode == DifficultyMode.EASY_MODE
+            hint = f"Ожидается: переход в состояние {expected_to_code} с выходом {expected_output}"
+            return error, hint
     
     @staticmethod
     def _format_wrong_transition_error(
-        hint_level: HintLevel,
+        difficulty_mode: DifficultyMode,
         student_state_code: str,
         input_val: str,
         actual_to_code: str,
         actual_output: int,
         expected_to_code: str,
         expected_output: int
-    ) -> str:
+    ) -> tuple[str, Optional[str]]:
         """
-        Форматирует сообщение об ошибке неверного перехода автомата в зависимости от уровня подсказок.
+        Форматирует сообщение об ошибке неверного перехода автомата в зависимости от режима сложности.
 
         Args:
-            hint_level (HintLevel): Уровень детализации подсказок для студента.
+            difficulty_mode (DifficultyMode): Режим сложности проверки (HARD_MODE, MEDIUM_MODE, EASY_MODE).
             student_state_code (str): Код состояния, из которого выполняется переход.
             input_val (str): Входное значение, при котором произошел переход.
             actual_to_code (str): Код состояния, в которое фактически произошел переход.
@@ -302,25 +301,27 @@ class AutomatonService():
             expected_output (int): Ожидаемое выходное значение перехода.
 
         Returns:
-            str: Отформатированное сообщение об ошибке с учетом уровня подсказок:
-                - NO_HINTS: базовое сообщение без деталей
-                - LIGHT_HINTS: сообщение с указанием состояния и входного значения
-                - FULL_HINTS: полное сообщение с фактическими и ожидаемыми значениями
+            tuple[str, Optional[str]]: (error_message, hint_message)
+                - error_message: текст ошибки (всегда)
+                - hint_message: подсказка (только для MEDIUM_MODE и EASY_MODE)
         """
-        if hint_level == HintLevel.NO_HINTS:
-            return "Обнаружен неверный переход"
-        elif hint_level == HintLevel.LIGHT_HINTS:
-            return f"Неверный переход из состояния {student_state_code} при входе {input_val}"
-        else:  # hint_level == HintLevel.FULL_HINTS
-            return (
-                f"Неверный переход из состояния {student_state_code} при входе {input_val}. "
+        error = f"Неверный переход из состояния {student_state_code} при входе {input_val}"
+        
+        if difficulty_mode == DifficultyMode.HARD_MODE:
+            return error, None
+        elif difficulty_mode == DifficultyMode.MEDIUM_MODE:
+            hint = "Проверьте таблицу переходов для этого состояния"
+            return error, hint
+        else:  # difficulty_mode == DifficultyMode.EASY_MODE
+            hint = (
                 f"Получено: переход в {actual_to_code} с выходом {actual_output}. "
                 f"Ожидается: переход в {expected_to_code} с выходом {expected_output}"
             )
+            return error, hint
     
     @staticmethod
     def _format_extra_transition_error(
-        hint_level: HintLevel,
+        difficulty_mode: DifficultyMode,
         student_state_code: str,
         input_val: str,
         actual_to_code: str,
@@ -330,12 +331,12 @@ class AutomatonService():
         Форматирует сообщение об ошибке для лишнего перехода в автомате.
         Метод создает текст сообщения об ошибке, когда в автомате
         обнаружен переход, которого не должно быть в эталонном автомате.
-        Уровень детализации сообщения зависит от параметра hint_level.
+        Уровень детализации сообщения зависит от параметра difficulty_mode.
         Args:
-            hint_level (HintLevel): Уровень детализации подсказок в сообщении об ошибке.
-                - NO_HINTS: минимальная информация
-                - LIGHT_HINTS: базовая информация о переходе
-                - FULL_HINTS: полная информация о переходе
+            difficulty_mode (DifficultyMode): Режим сложности проверки.
+                - HARD_MODE: минимальная информация
+                - MEDIUM_MODE: базовая информация о переходе
+                - EASY_MODE: полная информация о переходе
             student_state_code (str): Код состояния, из которого идет лишний переход.
             input_val (str): Входное значение, при котором происходит переход.
             actual_to_code (str): Код состояния, в которое ведет лишний переход.
@@ -343,17 +344,17 @@ class AutomatonService():
         Returns:
             str: Отформатированное сообщение об ошибке лишнего перехода.
         Examples:
-            >>> _format_extra_transition_error(HintLevel.NO_HINTS, "0", "11", "1", 0)
+            >>> _format_extra_transition_error(DifficultyMode.HARD_MODE, "0", "11", "1", 0)
             "Обнаружен лишний переход"
-            >>> _format_extra_transition_error(HintLevel.LIGHT_HINTS, "0", "11", "1", 0)
+            >>> _format_extra_transition_error(DifficultyMode.MEDIUM_MODE, "0", "11", "1", 0)
             "Лишний переход из состояния 0 при входе 11"
-            >>> _format_extra_transition_error(HintLevel.FULL_HINTS, "0", "11", "1", 0)
+            >>> _format_extra_transition_error(DifficultyMode.EASY_MODE, "0", "11", "1", 0)
         """
-        if hint_level == HintLevel.NO_HINTS:
+        if difficulty_mode == DifficultyMode.HARD_MODE:
             return "Обнаружен лишний переход"
-        elif hint_level == HintLevel.LIGHT_HINTS:
+        elif difficulty_mode == DifficultyMode.MEDIUM_MODE:
             return f"Лишний переход из состояния {student_state_code} при входе {input_val}"
-        else:  # hint_level == HintLevel.FULL_HINTS
+        else:  # difficulty_mode == DifficultyMode.EASY_MODE
             return (
                 f"Лишний переход из состояния {student_state_code} при входе {input_val} "
                 f"в состояние {actual_to_code} с выходом {actual_output} (не должен существовать)"
@@ -364,17 +365,17 @@ class AutomatonService():
         student: StudentAutomaton,
         reference: ReferenceAutomaton,
         mapping: Dict[str, str],
-        hint_level: HintLevel = HintLevel.NO_HINTS
-    ) -> Tuple[bool, List[str]]:
+        difficulty_mode: DifficultyMode = DifficultyMode.HARD_MODE
+    ) -> Tuple[bool, List[str], List[str]]:
         """
-        Проверяет структуру графа переходов и формирует список ошибок.
+        Проверяет структуру графа переходов и формирует список ошибок и подсказок.
         
         Выполняет три проверки:
             1. Все переходы из эталона должны быть у студента
             2. Выходы на соответствующих переходах должны совпадать
             3. У студента не должно быть лишних переходов
         
-        Пример работы (hint_level=3):
+        Пример работы (difficulty_mode=EASY_MODE):
             Эталон: S0-[00]->S1(out=1)
             Студент: 0-[00]->0(out=0)  # неверное целевое состояние и выход
             mapping = {"0": "S0", "1": "S1"}
@@ -387,12 +388,13 @@ class AutomatonService():
             student: Автомат студента
             reference: Эталонный автомат
             mapping: Отображение кодов студента на имена эталона
-            hint_level: Уровень подсказок (1-без деталей, 2-место ошибки, 3-полная информация)
+            difficulty_mode: Режим сложности (HARD_MODE, MEDIUM_MODE, EASY_MODE)
             
         Returns:
-            Tuple[успех, список_текстовых_ошибок]
+            Tuple[успех, список_текстовых_ошибок, список_подсказок]
         """
         errors = []
+        hints = []
         
         # Строим карты переходов
         ref_transitions = AutomatonService._build_transition_map(reference.transitions)
@@ -407,22 +409,26 @@ class AutomatonService():
             if key not in student_transitions:
                 # Переход полностью отсутствует
                 ref_to_code = reverse_mapping.get(ref_to, "?")
-                error = AutomatonService._format_missing_transition_error(
-                    hint_level, student_state_code, input_val, ref_to_code, ref_output
+                error, hint = AutomatonService._format_missing_transition_error(
+                    difficulty_mode, student_state_code, input_val, ref_to_code, ref_output
                 )
                 errors.append(error)
+                if hint:
+                    hints.append(hint)
             else:
                 # Переход есть, но проверяем корректность целевого состояния и выхода
                 student_to, student_output = student_transitions[key]
                 if student_to != ref_to or student_output != ref_output:
                     actual_state_code = reverse_mapping.get(student_to, "?")
                     ref_to_code = reverse_mapping.get(ref_to, "?")
-                    error = AutomatonService._format_wrong_transition_error(
-                        hint_level, student_state_code, input_val,
+                    error, hint = AutomatonService._format_wrong_transition_error(
+                        difficulty_mode, student_state_code, input_val,
                         actual_state_code, student_output,
                         ref_to_code, ref_output
                     )
                     errors.append(error)
+                    if hint:
+                        hints.append(hint)
         
         # Проверка 2: У студента не должно быть лишних переходов
         for key in student_transitions:
@@ -433,11 +439,11 @@ class AutomatonService():
                 actual_state_code = reverse_mapping.get(student_to, "?")
                 
                 error = AutomatonService._format_extra_transition_error(
-                    hint_level, student_state_code, input_val, actual_state_code, student_output
+                    difficulty_mode, student_state_code, input_val, actual_state_code, student_output
                 )
                 errors.append(error)
         
-        return (len(errors) == 0, errors)
+        return (len(errors) == 0, errors, hints)
     
     @staticmethod
     def _collect_transitions_with_output_1(student: StudentAutomaton) -> Set[Tuple[str, str]]:
@@ -600,44 +606,44 @@ class AutomatonService():
         return "→".join(input_seq[:up_to_step])
 
     @staticmethod
-    def _get_error_limit(hint_level: HintLevel) -> int:
+    def _get_error_limit(difficulty_mode: DifficultyMode) -> int:
         """
-        Возвращает максимальное количество ошибок для отображения в зависимости от уровня подсказок.
+        Возвращает максимальное количество ошибок для отображения в зависимости от режима сложности.
 
-        Уровень 1: 3 ошибки (минимальная информация)
-        Уровень 2-3: 5 ошибок (больше деталей)
+        HARD_MODE: 3 ошибки (минимальная информация)
+        MEDIUM_MODE/EASY_MODE: 5 ошибок (больше деталей)
 
         Args:
-            hint_level: Уровень подсказок (1-3)
+            difficulty_mode: Режим сложности
 
         Returns:
             Максимальное количество ошибок
         """
-        return AutomatonService._ERROR_LIMIT_MINIMAL if hint_level == HintLevel.NO_HINTS else AutomatonService._ERROR_LIMIT_DETAILED
+        return AutomatonService._ERROR_LIMIT_MINIMAL if difficulty_mode == DifficultyMode.HARD_MODE else AutomatonService._ERROR_LIMIT_DETAILED
 
     
     @staticmethod
-    def _format_y_equation_error(hint_level: HintLevel, detailed_error: str) -> List[str]:
+    def _format_y_equation_error(difficulty_mode: DifficultyMode, detailed_error: str) -> List[str]:
         """
-        Форматирует ошибку y_equation в зависимости от уровня подсказок.
+        Форматирует ошибку y_equation в зависимости от режима сложности.
         
         Пример:
-            hint_level=1: ["Каноническое уравнение неправильное"]
-            hint_level=2: ["Ошибка в каноническом уравнении y"]
-            hint_level=3: ["В автомате есть переход с выходом y=1: ..."]
+            HARD_MODE: ["Каноническое уравнение неправильное"]
+            MEDIUM_MODE: ["Ошибка в каноническом уравнении y"]
+            EASY_MODE: ["В автомате есть переход с выходом y=1: ..."]
         
         Args:
-            hint_level: Уровень подсказок (1-3)
+            difficulty_mode: Режим сложности
             detailed_error: Детальное сообщение об ошибке
             
         Returns:
             Список с одним отформатированным сообщением об ошибке
         """
-        if hint_level == HintLevel.NO_HINTS:
+        if difficulty_mode == DifficultyMode.HARD_MODE:
             return ["Каноническое уравнение неправильное"]
-        elif hint_level == HintLevel.LIGHT_HINTS:
+        elif difficulty_mode == DifficultyMode.MEDIUM_MODE:
             return ["Ошибка в каноническом уравнении y"]
-        else:  # hint_level == HintLevel.FULL_HINTS
+        else:  # difficulty_mode == DifficultyMode.EASY_MODE
             return [detailed_error]
     
     @staticmethod
@@ -748,7 +754,7 @@ class AutomatonService():
         Returns:
             VerificationResult со статусом успеха и деталями ошибок
         """
-        hint_level: HintLevel = student.hint_level
+        difficulty_mode: DifficultyMode = student.difficulty_mode
         
         # Шаг 1: Попытка найти валидное отображение состояний
         mapping_found, state_mapping = AutomatonService.find_state_mapping(student, reference)
@@ -758,27 +764,30 @@ class AutomatonService():
             diagnostic_mapping = AutomatonService._create_diagnostic_mapping(student, reference)
             
             # Проверим структуру с этим отображением для получения детальных ошибок
-            _, graph_errors = AutomatonService._check_graph_structure(
-                student, reference, diagnostic_mapping, hint_level
+            _, graph_errors, graph_hints = AutomatonService._check_graph_structure(
+                student, reference, diagnostic_mapping, difficulty_mode
             )
             
-            # Формируем сообщение в зависимости от уровня подсказок
-            if hint_level == HintLevel.NO_HINTS:
+            # Формируем сообщение в зависимости от режима сложности
+            if difficulty_mode == DifficultyMode.HARD_MODE:
                 message = "Граф автомата неверный"
                 # Ограничиваем ошибки до минимального лимита
                 errors_to_show = graph_errors[:AutomatonService._ERROR_LIMIT_MINIMAL] if graph_errors else []
+                hints_to_show = None
             else:
                 message = "Граф автомата неверный"
                 # Ограничиваем ошибки до детального лимита
                 errors_to_show = graph_errors[:AutomatonService._ERROR_LIMIT_DETAILED] if graph_errors else []
                 if len(graph_errors) > AutomatonService._ERROR_LIMIT_DETAILED:
                     errors_to_show.append(f"... и ещё {len(graph_errors) - AutomatonService._ERROR_LIMIT_DETAILED} ошибок")
+                # Показываем подсказки только если они есть и режим не NO_HINTS
+                hints_to_show = graph_hints if graph_hints else None
 
             return VerificationResult(
                 success=False,
                 message=message,
                 errors=errors_to_show,
-                test_sequences_count=0
+                hints=hints_to_show
             )
         
         # Шаг 2: Генерация тестовых последовательностей
@@ -803,22 +812,22 @@ class AutomatonService():
             )
             
             # Сравнение выходов
-            error_limit = AutomatonService._get_error_limit(hint_level)
+            error_limit = AutomatonService._get_error_limit(difficulty_mode)
             
             for step, (ref_out, stud_out) in enumerate(zip(ref_outputs, student_outputs)):
                 if ref_out != stud_out:
                     input_str = AutomatonService._format_input_sequence(input_seq, step + 1)
                     
-                    if hint_level == HintLevel.NO_HINTS:
-                        # Уровень 1: просто сообщаем о наличии ошибки
+                    if difficulty_mode == DifficultyMode.HARD_MODE:
+                        # HARD_MODE: просто сообщаем о наличии ошибки
                         error_messages.append("Обнаружена ошибка в выходной последовательности")
-                    elif hint_level == HintLevel.LIGHT_HINTS:
-                        # Уровень 2: указываем шаг и входную последовательность
+                    elif difficulty_mode == DifficultyMode.MEDIUM_MODE:
+                        # MEDIUM_MODE: указываем шаг и входную последовательность
                         error_messages.append(
                             f"Ошибка на шаге {step + 1}, вход: {input_str}"
                         )
-                    else:  # hint_level == HintLevel.FULL_HINTS
-                        # Уровень 3: полная информация
+                    else:  # difficulty_mode == DifficultyMode.EASY_MODE
+                        # EASY_MODE: полная информация
                         error_messages.append(
                             f"Ошибка на шаге {step + 1}, вход: {input_str}. "
                             f"Получено: выход={stud_out}, ожидается: выход={ref_out}"
@@ -831,14 +840,12 @@ class AutomatonService():
             if len(error_messages) >= error_limit:
                 break
         
-        test_sequences_count = len(test_sequences)
-        
         if error_messages:
             return VerificationResult(
                 success=False,
                 message="Автомат работает неправильно",
                 errors=error_messages,
-                test_sequences_count=test_sequences_count
+                hints=None
             )
         
         # Шаг 4: Проверка канонического уравнения y_equation
@@ -847,19 +854,18 @@ class AutomatonService():
         )
         
         if not y_equation_valid:
-            y_errors = AutomatonService._format_y_equation_error(hint_level, y_equation_error)
+            y_errors = AutomatonService._format_y_equation_error(difficulty_mode, y_equation_error)
             
             return VerificationResult(
                 success=False,
                 message="Граф автомата верный, но каноническое уравнение неправильное",
                 errors=y_errors,
-                test_sequences_count=test_sequences_count
+                hints=None
             )
         
         return VerificationResult(
             success=True,
             message="Автомат верный! Все проверки пройдены.",
-            state_mapping=state_mapping,
             errors=[],
-            test_sequences_count=test_sequences_count
+            hints=None
         )

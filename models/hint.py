@@ -1,6 +1,8 @@
 from enum import Enum
 
-class HintLevel(int, Enum):
-    NO_HINTS = 1
-    LIGHT_HINTS = 2
-    FULL_HINTS = 3
+# Новый класс для режимов сложности
+class DifficultyMode(int, Enum):
+    """Режимы сложности проверки автомата"""
+    HARD_MODE = 1      # Строгая проверка, без подсказок
+    MEDIUM_MODE = 2    # Проверка с подсказками
+    EASY_MODE = 3      # Упрощенная проверка

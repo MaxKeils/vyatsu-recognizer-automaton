@@ -63,7 +63,7 @@ class TestConfigurationAPI:
         """Test creating configuration."""
         config_data = {
             "duration": 60,
-            "hint_level": "LIGHT_HINTS"
+            "difficulty_mode": "MEDIUM_MODE"
         }
         
         response = client.put("/api/v1/configuration/", json=config_data)
@@ -71,14 +71,14 @@ class TestConfigurationAPI:
         
         data = response.json()
         assert data["duration"] == 60
-        assert data["hint_level"] == "LIGHT_HINTS"
+        assert data["difficulty_mode"] == "MEDIUM_MODE"
 
     def test_get_configuration(self, client):
         """Test getting configuration."""
         # First create configuration
         config_data = {
             "duration": 30,
-            "hint_level": "NO_HINTS"
+            "difficulty_mode": "HARD_MODE"
         }
         client.put("/api/v1/configuration/", json=config_data)
         
@@ -88,7 +88,7 @@ class TestConfigurationAPI:
         
         data = response.json()
         assert data["duration"] == 30
-        assert data["hint_level"] == "NO_HINTS"
+        assert data["difficulty_mode"] == "HARD_MODE"
 
 
 class TestTaskAPI:
@@ -99,9 +99,9 @@ class TestTaskAPI:
         task_data = {
             "description": "Test task",
             "task": {
-                "states": ["S0", "S1"],
+                "state_codes": ["S0", "S1"],
                 "initial_state": "S0",
-                "y_equation": ["S0"],
+                "y": ["S000"],
                 "transitions": [
                     {
                         "from": "S0",
@@ -114,7 +114,7 @@ class TestTaskAPI:
         }
         
         response = client.post("/api/v1/tasks/", json=task_data)
-        assert response.status_code == 200
+        assert response.status_code == 201  # POST создание возвращает 201 CREATED
         
         data = response.json()
         assert data["description"] == "Test task"
@@ -126,9 +126,9 @@ class TestTaskAPI:
         task_data = {
             "description": "Test task",
             "task": {
-                "states": ["S0", "S1"],
+                "state_codes": ["S0", "S1"],
                 "initial_state": "S0",
-                "y_equation": ["S0"],
+                "y": ["S000"],
                 "transitions": []
             }
         }
@@ -148,9 +148,9 @@ class TestTaskAPI:
         task_data = {
             "description": "Test task",
             "task": {
-                "states": ["S0", "S1"],
+                "state_codes": ["S0", "S1"],
                 "initial_state": "S0",
-                "y_equation": ["S0"],
+                "y": ["S000"],
                 "transitions": []
             }
         }
@@ -169,45 +169,46 @@ class TestTaskAPI:
 class TestUserAPI:
     """Test user endpoints."""
 
-    def test_create_user_by_email(self, client):
-        """Test creating user by email."""
+    def test_create_user_by_full_name(self, client):
+        """Test creating user by full name."""
         user_data = {
-            "email": "test@example.com",
-            "full_name": "Test User"
+            "full_name": "Иванов Иван Иванович",
+            "group_name": "ИВТ-41"
         }
         
         response = client.post("/api/v1/users/", json=user_data)
         assert response.status_code == 200
         
         data = response.json()
-        assert data["email"] == "test@example.com"
-        assert data["full_name"] == "Test User"
-        assert "id" in data
+        assert "user" in data
+        assert data["user"]["full_name"] == "Иванов Иван Иванович"
+        assert data["user"]["group_name"] == "ИВТ-41"
+        assert "id" in data["user"]
 
-    def test_get_existing_user_by_email(self, client):
-        """Test getting existing user by email."""
+    def test_get_existing_user_by_full_name(self, client):
+        """Test getting existing user by full name."""
         user_data = {
-            "email": "test@example.com",
-            "full_name": "Test User"
+            "full_name": "Петров Петр Петрович",
+            "group_name": "ИВТ-41"
         }
         
         # Create user first
         first_response = client.post("/api/v1/users/", json=user_data)
-        first_user = first_response.json()
+        first_user = first_response.json()["user"]
         
         # Try to create same user again
         second_response = client.post("/api/v1/users/", json=user_data)
-        second_user = second_response.json()
+        second_user = second_response.json()["user"]
         
         # Should return the same user
         assert first_user["id"] == second_user["id"]
-        assert first_user["email"] == second_user["email"]
+        assert first_user["full_name"] == second_user["full_name"]
 
     def test_get_all_users(self, client):
         """Test getting all users."""
         user_data = {
-            "email": "test@example.com",
-            "full_name": "Test User"
+            "full_name": "Сидоров Сидор Сидорович",
+            "group_name": "ИВТ-42"
         }
         client.post("/api/v1/users/", json=user_data)
         
@@ -216,7 +217,8 @@ class TestUserAPI:
         
         data = response.json()
         assert len(data) == 1
-        assert data[0]["email"] == "test@example.com"
+        assert data[0]["full_name"] == "Сидоров Сидор Сидорович"
+        assert data[0]["group_name"] == "ИВТ-42"
 
 
 class TestSubmissionAPI:
@@ -226,19 +228,19 @@ class TestSubmissionAPI:
         """Test creating a submission."""
         # Create user first
         user_data = {
-            "email": "student@example.com",
-            "full_name": "Student User"
+            "full_name": "Студентов Студент Студентович",
+            "group_name": "ИВТ-43"
         }
         user_response = client.post("/api/v1/users/", json=user_data)
-        user_id = user_response.json()["id"]
+        user_id = user_response.json()["user"]["id"]
         
         # Create task first
         task_data = {
             "description": "Test task",
             "task": {
-                "states": ["S0", "S1"],
+                "state_codes": ["S0", "S1"],
                 "initial_state": "S0",
-                "y_equation": ["S0"],
+                "y": ["S000"],
                 "transitions": [
                     {
                         "from": "S0",
@@ -257,13 +259,13 @@ class TestSubmissionAPI:
             "task_id": task_id,
             "user_id": user_id,
             "submitted_task": {
-                "states": ["S0", "S1"],
-                "initial_state": "S0",
-                "y_equation": ["S0"],
+                "state_codes": ["0", "1"],
+                "initial_state": "0",
+                "y": ["000"],
                 "transitions": [
                     {
-                        "from": "S0",
-                        "to": "S1",
+                        "from": "0",
+                        "to": "1",
                         "on": ["01"],
                         "out": 0
                     }
@@ -284,18 +286,18 @@ class TestSubmissionAPI:
         """Test getting submissions by user."""
         # Create user and task first
         user_data = {
-            "email": "student@example.com",
-            "full_name": "Student User"
+            "full_name": "Тестовый Студент Иванович",
+            "group_name": "ИВТ-44"
         }
         user_response = client.post("/api/v1/users/", json=user_data)
-        user_id = user_response.json()["id"]
+        user_id = user_response.json()["user"]["id"]
         
         task_data = {
             "description": "Test task",
             "task": {
-                "states": ["S0", "S1"],
+                "state_codes": ["S0", "S1"],
                 "initial_state": "S0",
-                "y_equation": ["S0"],
+                "y": ["S000"],
                 "transitions": []
             }
         }
@@ -307,9 +309,9 @@ class TestSubmissionAPI:
             "task_id": task_id,
             "user_id": user_id,
             "submitted_task": {
-                "states": ["S0", "S1"],
-                "initial_state": "S0",
-                "y_equation": ["S0"],
+                "state_codes": ["0", "1"],
+                "initial_state": "0",
+                "y": ["000"],
                 "transitions": []
             }
         }

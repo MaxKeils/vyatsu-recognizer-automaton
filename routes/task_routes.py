@@ -21,11 +21,14 @@ def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
     """Get task by ID."""
     task = TaskCRUD.get_task_by_id(db, task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Задание не найдено"
+        )
     return task
 
 
-@router.post("/", response_model=TaskResponse)
+@router.post("/", response_model=TaskResponse, status_code=201)
 def create_task(task_data: TaskRequest, db: Session = Depends(get_db)):
     """Create a new task."""
     task = TaskCRUD.create_task(db, task_data)
@@ -41,14 +44,23 @@ def update_task(
     """Update an existing task."""
     task = TaskCRUD.update_task(db, task_id, task_data)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Задание не найдено"
+        )
     return task
 
 
-@router.delete("/{task_id}")
+@router.delete("/{task_id}", status_code=200)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     """Delete a task."""
     success = TaskCRUD.delete_task(db, task_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"message": "Task deleted successfully"}
+        raise HTTPException(
+            status_code=404,
+            detail="Задание не найдено"
+        )
+    return {
+        "success": True,
+        "message": "Задание успешно удалено"
+    }

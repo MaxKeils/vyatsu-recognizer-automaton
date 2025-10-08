@@ -102,7 +102,7 @@ class TestYEquationVerification:
                 Transition(**{"from": "1", "to": "0", "on": ["01", "10"], "out": 0}),
             ],
             y_equation=["100", "001"],  # НЕПРАВИЛЬНО: "001" лишний, там out=0
-            hint_level=3
+            difficulty_mode=3  # EASY_MODE - полные подсказки
         )
         
         reference = ReferenceAutomaton(
@@ -210,7 +210,7 @@ class TestYEquationVerification:
                 Transition(**{"from": "11", "to": "11", "on": ["11"], "out": 0}),
             ],
             y_equation=["0000"],  # НЕПРАВИЛЬНО: состояние "00" + переход "00", но там out=0
-            hint_level=3
+            difficulty_mode=3  # EASY_MODE - полные подсказки
         )
         
         reference = ReferenceAutomaton(
