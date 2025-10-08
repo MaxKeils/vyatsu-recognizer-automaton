@@ -771,8 +771,8 @@ class AutomatonService():
             # Формируем сообщение в зависимости от режима сложности
             if difficulty_mode == DifficultyMode.HARD_MODE:
                 message = "Граф автомата неверный"
-                # Ограничиваем ошибки до минимального лимита
-                errors_to_show = graph_errors[:AutomatonService._ERROR_LIMIT_MINIMAL] if graph_errors else []
+                # В HARD_MODE не показываем детали ошибок
+                errors_to_show = []
                 hints_to_show = None
             else:
                 message = "Граф автомата неверный"
@@ -780,7 +780,7 @@ class AutomatonService():
                 errors_to_show = graph_errors[:AutomatonService._ERROR_LIMIT_DETAILED] if graph_errors else []
                 if len(graph_errors) > AutomatonService._ERROR_LIMIT_DETAILED:
                     errors_to_show.append(f"... и ещё {len(graph_errors) - AutomatonService._ERROR_LIMIT_DETAILED} ошибок")
-                # Показываем подсказки только если они есть и режим не NO_HINTS
+                # Показываем подсказки только если они есть и режим не HARD_MODE
                 hints_to_show = graph_hints if graph_hints else None
 
             return VerificationResult(
@@ -844,7 +844,7 @@ class AutomatonService():
             return VerificationResult(
                 success=False,
                 message="Автомат работает неправильно",
-                errors=error_messages,
+                errors=[] if difficulty_mode == DifficultyMode.HARD_MODE else error_messages,
                 hints=None
             )
         
@@ -859,7 +859,7 @@ class AutomatonService():
             return VerificationResult(
                 success=False,
                 message="Граф автомата верный, но каноническое уравнение неправильное",
-                errors=y_errors,
+                errors=[] if difficulty_mode == DifficultyMode.HARD_MODE else y_errors,
                 hints=None
             )
         

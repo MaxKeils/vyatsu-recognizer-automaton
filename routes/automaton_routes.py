@@ -176,15 +176,17 @@ async def verify_section(
         
         # Для разных секций проверяем разные части автомата
         if request.section_number == 1:
-            # Секция 1: только состояния - НЕ создаем StudentAutomaton
+            # Секция 1: только состояния 
             # Просто проверяем базовые правила
             errors = []
             hints = []
             
             # Проверка количества состояний
+            has_errors = False
             if len(request.data.state_codes) != len(reference_automaton.state_codes):
-                errors.append("Неверное количество состояний")
+                has_errors = True
                 if difficulty_mode_int >= 2:
+                    errors.append("Неверное количество состояний")
                     hints.append(f"Ожидается {len(reference_automaton.state_codes)} состояний, получено {len(request.data.state_codes)}")
             
             # Проверка начального состояния (по позиции, не по значению)
@@ -192,15 +194,16 @@ async def verify_section(
             stud_initial_index = request.data.state_codes.index(request.data.initial_state) if request.data.initial_state in request.data.state_codes else -1
             
             if ref_initial_index != stud_initial_index:
-                errors.append("Неверное начальное состояние")
+                has_errors = True
                 if difficulty_mode_int >= 2:
+                    errors.append("Неверное начальное состояние")
                     hints.append(f"Начальное состояние должно быть на позиции {ref_initial_index}")
             
             return VerificationResult(
-                success=len(errors) == 0,
-                message="Секция 1 проверена успешно" if len(errors) == 0 else "Секция 1 содержит ошибки",
+                success=not has_errors,
+                message="Секция 1 проверена успешно" if not has_errors else "Секция 1 содержит ошибки",
                 errors=errors,
-                hints=hints if difficulty_mode_int >= 2 and hints else None
+                hints=hints if hints else None
             )
             
         elif request.section_number == 2:
@@ -229,13 +232,15 @@ async def verify_section(
                 test_length=3  # Короче для секции
             )
             
+            # Результат уже учитывает difficulty_mode внутри AutomatonService
             # Фильтруем только ошибки графа (не Y-уравнения)
             graph_errors = [e for e in result.errors if "Y-уравнение" not in e and "уравнение" not in e.lower()]
             graph_hints = result.hints if result.hints else None
             
+            # Проверяем success на основе результата от AutomatonService
             return VerificationResult(
-                success=len(graph_errors) == 0,
-                message="Секция 2 проверена успешно" if len(graph_errors) == 0 else "Секция 2 содержит ошибки",
+                success=result.success,
+                message="Секция 2 проверена успешно" if result.success else "Секция 2 содержит ошибки",
                 errors=graph_errors,
                 hints=graph_hints
             )
