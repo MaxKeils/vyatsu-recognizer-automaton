@@ -97,3 +97,39 @@ class VirtualVariant(Base):
     
     # Relationship
     task = relationship("Task", back_populates="virtual_variants")
+
+
+class TheoryQuestion(Base):
+    """Модель для теоретических вопросов."""
+    __tablename__ = "theory_questions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    question_text = Column(String, nullable=False)
+    question_type = Column(String, nullable=False)  # 'single' или 'multiple'
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    answer_options = relationship("TheoryAnswerOption", back_populates="question", cascade="all, delete-orphan")
+
+
+class TheoryAnswerOption(Base):
+    """Модель для вариантов ответов на теоретические вопросы."""
+    __tablename__ = "theory_answer_options"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    question_id = Column(Integer, ForeignKey("theory_questions.id"), nullable=False)
+    option_text = Column(String, nullable=False)
+    is_correct = Column(Boolean, nullable=False, default=False)
+    option_order = Column(Integer, nullable=False)  # Порядок отображения
+    
+    # Relationship
+    question = relationship("TheoryQuestion", back_populates="answer_options")
+
+
+# TheoryTestSubmission удалена - используем Submission с is_test=TRUE
+# Результаты теста по теории сохраняются в таблице submissions:
+# - is_test = TRUE
+# - task_id = NULL (для теории не нужен task)
+# - submitted_task = {"question_id": N, "selected_option_ids": [1, 2, 3]}
+# - errors = {"is_correct": true/false, "correct_option_ids": [1, 2]}

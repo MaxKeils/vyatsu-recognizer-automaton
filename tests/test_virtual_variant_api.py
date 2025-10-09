@@ -31,14 +31,14 @@ def override_get_db():
 
 
 def create_test_app():
-    """Create test application with routes."""
+    """Create test application with admin routes (virtual variants are in admin panel)."""
     from fastapi import FastAPI
-    from routes import virtual_variant_routes, task_routes, configuration_routes
+    from routes import admin_routes, task_routes, configuration_routes
     
     app = FastAPI()
     
-    # Include routes
-    app.include_router(virtual_variant_routes.router, prefix="/api")
+    # Include routes - virtual variants are now in admin_routes
+    app.include_router(admin_routes.router, prefix="/api")
     app.include_router(task_routes.router, prefix="/api")
     app.include_router(configuration_routes.router, prefix="/api")
     
@@ -104,7 +104,7 @@ class TestVirtualVariantAPI:
             "display_number": 10
         }
         
-        response = client.post("/api/virtual-variants/", json=variant_data)
+        response = client.post("/api/admin/virtual-variants/", json=variant_data)
         assert response.status_code == 201
         
         data = response.json()
@@ -121,12 +121,12 @@ class TestVirtualVariantAPI:
         }
         
         # Первое создание должно пройти
-        response1 = client.post("/api/virtual-variants/", json=variant_data)
+        response1 = client.post("/api/admin/virtual-variants/", json=variant_data)
         assert response1.status_code == 201
         
-        # Второе создание с тем же display_number должно вернуть 409
-        response2 = client.post("/api/virtual-variants/", json=variant_data)
-        assert response2.status_code == 409
+        # Второе создание с тем же display_number должно вернуть 400
+        response2 = client.post("/api/admin/virtual-variants/", json=variant_data)
+        assert response2.status_code == 400
         assert "уже существует" in response2.json()["detail"]
     
     def test_create_virtual_variant_nonexistent_task(self, client):
@@ -136,17 +136,17 @@ class TestVirtualVariantAPI:
             "display_number": 20
         }
         
-        response = client.post("/api/virtual-variants/", json=variant_data)
+        response = client.post("/api/admin/virtual-variants/", json=variant_data)
         assert response.status_code == 404
         assert "не найдено" in response.json()["detail"]
     
     def test_get_all_virtual_variants(self, client):
         """Тест получения всех виртуальных вариантов."""
         # Создаем несколько вариантов
-        client.post("/api/virtual-variants/", json={"real_task_id": 1, "display_number": 1})
-        client.post("/api/virtual-variants/", json={"real_task_id": 2, "display_number": 2})
+        client.post("/api/admin/virtual-variants/", json={"real_task_id": 1, "display_number": 1})
+        client.post("/api/admin/virtual-variants/", json={"real_task_id": 2, "display_number": 2})
         
-        response = client.get("/api/virtual-variants/")
+        response = client.get("/api/admin/virtual-variants/")
         assert response.status_code == 200
         
         data = response.json()
@@ -158,13 +158,13 @@ class TestVirtualVariantAPI:
         """Тест получения варианта по ID."""
         # Создаем вариант
         create_response = client.post(
-            "/api/virtual-variants/",
+            "/api/admin/virtual-variants/",
             json={"real_task_id": 1, "display_number": 25}
         )
         variant_id = create_response.json()["id"]
         
         # Получаем его по ID
-        response = client.get(f"/api/virtual-variants/{variant_id}")
+        response = client.get(f"/api/admin/virtual-variants/{variant_id}")
         assert response.status_code == 200
         
         data = response.json()
@@ -173,7 +173,7 @@ class TestVirtualVariantAPI:
     
     def test_get_nonexistent_virtual_variant(self, client):
         """Тест получения несуществующего варианта."""
-        response = client.get("/api/virtual-variants/999")
+        response = client.get("/api/admin/virtual-variants/999")
         assert response.status_code == 404
         assert "не найден" in response.json()["detail"]
     
@@ -181,7 +181,7 @@ class TestVirtualVariantAPI:
         """Тест обновления виртуального варианта."""
         # Создаем вариант
         create_response = client.post(
-            "/api/virtual-variants/",
+            "/api/admin/virtual-variants/",
             json={"real_task_id": 1, "display_number": 30}
         )
         variant_id = create_response.json()["id"]
@@ -191,7 +191,7 @@ class TestVirtualVariantAPI:
             "real_task_id": 2,
             "display_number": 35
         }
-        response = client.put(f"/api/virtual-variants/{variant_id}", json=update_data)
+        response = client.put(f"/api/admin/virtual-variants/{variant_id}", json=update_data)
         assert response.status_code == 200
         
         data = response.json()
@@ -202,14 +202,14 @@ class TestVirtualVariantAPI:
         """Тест частичного обновления виртуального варианта."""
         # Создаем вариант
         create_response = client.post(
-            "/api/virtual-variants/",
+            "/api/admin/virtual-variants/",
             json={"real_task_id": 1, "display_number": 40}
         )
         variant_id = create_response.json()["id"]
         
         # Обновляем только display_number
         update_data = {"display_number": 45}
-        response = client.put(f"/api/virtual-variants/{variant_id}", json=update_data)
+        response = client.put(f"/api/admin/virtual-variants/{variant_id}", json=update_data)
         assert response.status_code == 200
         
         data = response.json()
@@ -219,23 +219,23 @@ class TestVirtualVariantAPI:
     def test_update_virtual_variant_conflict(self, client):
         """Тест обновления с конфликтом display_number."""
         # Создаем два варианта
-        client.post("/api/virtual-variants/", json={"real_task_id": 1, "display_number": 50})
+        client.post("/api/admin/virtual-variants/", json={"real_task_id": 1, "display_number": 50})
         create_response = client.post(
-            "/api/virtual-variants/",
+            "/api/admin/virtual-variants/",
             json={"real_task_id": 1, "display_number": 51}
         )
         variant_id = create_response.json()["id"]
         
         # Пытаемся обновить второй вариант на display_number первого
         update_data = {"display_number": 50}
-        response = client.put(f"/api/virtual-variants/{variant_id}", json=update_data)
-        assert response.status_code == 409
+        response = client.put(f"/api/admin/virtual-variants/{variant_id}", json=update_data)
+        assert response.status_code == 400
         assert "уже существует" in response.json()["detail"]
     
     def test_update_nonexistent_virtual_variant(self, client):
         """Тест обновления несуществующего варианта."""
         update_data = {"display_number": 60}
-        response = client.put("/api/virtual-variants/999", json=update_data)
+        response = client.put("/api/admin/virtual-variants/999", json=update_data)
         assert response.status_code == 404
         assert "не найден" in response.json()["detail"]
     
@@ -243,21 +243,23 @@ class TestVirtualVariantAPI:
         """Тест удаления виртуального варианта."""
         # Создаем вариант
         create_response = client.post(
-            "/api/virtual-variants/",
+            "/api/admin/virtual-variants/",
             json={"real_task_id": 1, "display_number": 70}
         )
         variant_id = create_response.json()["id"]
         
         # Удаляем его
-        response = client.delete(f"/api/virtual-variants/{variant_id}")
-        assert response.status_code == 204
+        response = client.delete(f"/api/admin/virtual-variants/{variant_id}")
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert "удален" in response.json()["message"]
         
         # Проверяем, что он действительно удален
-        get_response = client.get(f"/api/virtual-variants/{variant_id}")
+        get_response = client.get(f"/api/admin/virtual-variants/{variant_id}")
         assert get_response.status_code == 404
     
     def test_delete_nonexistent_virtual_variant(self, client):
         """Тест удаления несуществующего варианта."""
-        response = client.delete("/api/virtual-variants/999")
+        response = client.delete("/api/admin/virtual-variants/999")
         assert response.status_code == 404
         assert "не найден" in response.json()["detail"]

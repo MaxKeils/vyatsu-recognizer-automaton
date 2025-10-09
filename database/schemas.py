@@ -331,6 +331,16 @@ class VirtualVariantResponse(BaseModel):
     description: Optional[str] = None
 
 
+class VirtualVariantAdminResponse(BaseModel):
+    """Виртуальный вариант для админской панели (полная информация)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    real_task_id: int
+    display_number: int
+    created_at: datetime
+
+
 class VirtualVariantCreateRequest(BaseModel):
     """Запрос на создание виртуального варианта."""
     
@@ -361,3 +371,143 @@ class VirtualVariantUpdateRequest(BaseModel):
     
     real_task_id: Optional[int] = Field(None, description="Новый ID реального задания")
     display_number: Optional[int] = Field(None, ge=1, description="Новый номер для отображения")
+
+
+# ============== Theory Questions Schemas ==============
+
+class TheoryAnswerOptionBase(BaseModel):
+    """Базовая схема для варианта ответа."""
+    option_text: str = Field(..., description="Текст варианта ответа")
+    is_correct: bool = Field(..., description="Является ли ответ правильным")
+    option_order: int = Field(..., ge=1, description="Порядок отображения варианта")
+
+
+class TheoryAnswerOptionCreate(TheoryAnswerOptionBase):
+    """Схема для создания варианта ответа."""
+    pass
+
+
+class TheoryAnswerOptionResponse(TheoryAnswerOptionBase):
+    """Схема ответа с вариантом ответа (для админа - с правильными ответами)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+
+
+class TheoryAnswerOptionPublic(BaseModel):
+    """Публичная схема варианта ответа (БЕЗ информации о правильности)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    option_text: str
+    option_order: int
+
+
+class TheoryQuestionCreate(BaseModel):
+    """Схема для создания теоретического вопроса."""
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "question_text": "Что такое детерминированный конечный автомат?",
+                "question_type": "single",
+                "answer_options": [
+                    {"option_text": "Автомат, у которого для каждого состояния и входного символа определен ровно один переход", "is_correct": True, "option_order": 1},
+                    {"option_text": "Автомат, который работает случайным образом", "is_correct": False, "option_order": 2},
+                    {"option_text": "Автомат с бесконечным числом состояний", "is_correct": False, "option_order": 3}
+                ]
+            }
+        }
+    )
+    
+    question_text: str = Field(..., description="Текст вопроса")
+    question_type: str = Field(..., pattern="^(single|multiple)$", description="Тип вопроса: single или multiple")
+    answer_options: List[TheoryAnswerOptionCreate] = Field(..., min_length=2, description="Варианты ответов (минимум 2)")
+
+
+class TheoryQuestionUpdate(BaseModel):
+    """Схема для обновления вопроса."""
+    question_text: Optional[str] = Field(None, description="Новый текст вопроса")
+    question_type: Optional[str] = Field(None, pattern="^(single|multiple)$", description="Новый тип вопроса")
+    answer_options: Optional[List[TheoryAnswerOptionCreate]] = Field(None, description="Новые варианты ответов")
+
+
+class TheoryQuestionResponse(BaseModel):
+    """Схема ответа с вопросом (для админа - с правильными ответами)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    question_text: str
+    question_type: str
+    answer_options: List[TheoryAnswerOptionResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
+class TheoryQuestionPublic(BaseModel):
+    """Публичная схема вопроса (для студентов - БЕЗ правильных ответов)."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    question_text: str
+    question_type: str
+    answer_options: List[TheoryAnswerOptionPublic]
+
+
+class StudentAnswerRequest(BaseModel):
+    """Ответ студента на один вопрос."""
+    question_id: int = Field(..., description="ID вопроса")
+    selected_option_ids: List[int] = Field(..., min_length=1, description="ID выбранных вариантов ответа")
+
+
+class TheoryTestSubmitRequest(BaseModel):
+    """Запрос на проверку теста по теории."""
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "user_id": 1,
+                "answers": [
+                    {"question_id": 1, "selected_option_ids": [1]},
+                    {"question_id": 2, "selected_option_ids": [3, 4]}
+                ]
+            }
+        }
+    )
+    
+    user_id: int = Field(..., description="ID студента")
+    answers: List[StudentAnswerRequest] = Field(..., min_length=1, description="Список ответов студента")
+
+
+class QuestionResultDetail(BaseModel):
+    """Детальный результат по одному вопросу."""
+    question_id: int
+    question_text: str
+    question_type: str
+    is_correct: bool
+    selected_option_ids: List[int]
+    correct_option_ids: List[int]
+
+
+class TheoryTestSubmitResponse(BaseModel):
+    """Ответ с результатами теста."""
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "user_id": 1,
+                "total_questions": 15,
+                "correct_answers": 12,
+                "incorrect_answers": 3,
+                "score_percentage": 80.0,
+                "results": []
+            }
+        }
+    )
+    
+    user_id: int
+    total_questions: int
+    correct_answers: int
+    incorrect_answers: int
+    score_percentage: float
+    results: List[QuestionResultDetail]

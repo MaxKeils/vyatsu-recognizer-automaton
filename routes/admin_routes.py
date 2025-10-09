@@ -9,7 +9,7 @@ from database.schemas import (
     AdminLoginRequest, AdminLoginResponse,
     AdminChangePasswordRequest,
     VirtualVariantCreateRequest, VirtualVariantUpdateRequest,
-    VirtualVariantResponse
+    VirtualVariantAdminResponse
 )
 from service.auth_service import AuthService
 
@@ -94,10 +94,10 @@ async def change_admin_password(
     }
 
 
-@router.get("/virtual-variants", response_model=List[VirtualVariantResponse])
+@router.get("/virtual-variants", response_model=List[VirtualVariantAdminResponse])
 async def get_all_virtual_variants_admin(
     db: Session = Depends(get_db)
-) -> List[VirtualVariantResponse]:
+) -> List[VirtualVariantAdminResponse]:
     """
     Получить все виртуальные варианты (для админа).
     
@@ -113,11 +113,40 @@ async def get_all_virtual_variants_admin(
     return variants
 
 
-@router.post("/virtual-variants", response_model=VirtualVariantResponse, status_code=201)
+@router.get("/virtual-variants/{variant_id}", response_model=VirtualVariantAdminResponse)
+async def get_virtual_variant_by_id(
+    variant_id: int,
+    db: Session = Depends(get_db)
+) -> VirtualVariantAdminResponse:
+    """
+    Получить виртуальный вариант по ID.
+    
+    Args:
+        variant_id: ID виртуального варианта
+        db: Сессия БД
+        
+    Returns:
+        Виртуальный вариант
+        
+    Raises:
+        HTTPException: Если вариант не найден (404)
+    """
+    variant = VirtualVariantCRUD.get_virtual_variant_by_id(db, variant_id)
+    
+    if not variant:
+        raise HTTPException(
+            status_code=404,
+            detail="Виртуальный вариант не найден"
+        )
+    
+    return variant
+
+
+@router.post("/virtual-variants", response_model=VirtualVariantAdminResponse, status_code=201)
 async def create_virtual_variant(
     request: VirtualVariantCreateRequest,
     db: Session = Depends(get_db)
-) -> VirtualVariantResponse:
+) -> VirtualVariantAdminResponse:
     """
     Создать новый виртуальный вариант.
     
@@ -161,12 +190,12 @@ async def create_virtual_variant(
         )
 
 
-@router.put("/virtual-variants/{variant_id}", response_model=VirtualVariantResponse)
+@router.put("/virtual-variants/{variant_id}", response_model=VirtualVariantAdminResponse)
 async def update_virtual_variant(
     variant_id: int,
     request: VirtualVariantUpdateRequest,
     db: Session = Depends(get_db)
-) -> VirtualVariantResponse:
+) -> VirtualVariantAdminResponse:
     """
     Обновить виртуальный вариант.
     

@@ -1,9 +1,12 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from database.models import Configuration, Task, User, Submission, StudentProgress, VirtualVariant
+from database.models import (
+    Configuration, Task, User, Submission, StudentProgress, VirtualVariant,
+    TheoryQuestion, TheoryAnswerOption
+)
 from database.schemas import (
     ConfigurationRequest, TaskRequest, UserRequest, UserUpdateRequest, 
-    SubmissionRequest
+    SubmissionRequest, TheoryQuestionCreate, TheoryQuestionUpdate
 )
 
 
@@ -177,7 +180,15 @@ class SubmissionCRUD:
 
     @staticmethod
     def get_submissions_by_user_id(db: Session, user_id: int) -> List[Submission]:
-        return db.query(Submission).filter(Submission.user_id == user_id).all()
+        """
+        Получить все submissions пользователя по секциям автоматов.
+        
+        ВАЖНО: Фильтрует is_test=FALSE, чтобы тесты по теории не попадали в результаты.
+        """
+        return db.query(Submission).filter(
+            Submission.user_id == user_id,
+            Submission.is_test == False
+        ).all()
     
     @staticmethod
     def get_submission_by_id(db: Session, submission_id: int) -> Optional[Submission]:
@@ -457,3 +468,213 @@ class VirtualVariantCRUD:
             db.commit()
             return True
         return False
+
+
+class TheoryQuestionCRUD:
+    """CRUD операции для теоретических вопросов."""
+    
+    @staticmethod
+    def create_question(db: Session, question_data: TheoryQuestionCreate) -> TheoryQuestion:
+        """
+        Создать новый теоретический вопрос с вариантами ответов.
+        
+        Args:
+            db: Сессия БД
+            question_data: Данные вопроса с вариантами ответов
+            
+        Returns:
+            Созданный вопрос
+        """
+        # Создаем вопрос
+        db_question = TheoryQuestion(
+            question_text=question_data.question_text,
+            question_type=question_data.question_type
+        )
+        db.add(db_question)
+        db.flush()  # Получаем ID вопроса
+        
+        # Создаем варианты ответов
+        for option_data in question_data.answer_options:
+            db_option = TheoryAnswerOption(
+                question_id=db_question.id,
+                option_text=option_data.option_text,
+                is_correct=option_data.is_correct,
+                option_order=option_data.option_order
+            )
+            db.add(db_option)
+        
+        db.commit()
+        db.refresh(db_question)
+        return db_question
+    
+    @staticmethod
+    def get_all_questions(db: Session) -> List[TheoryQuestion]:
+        """Получить все вопросы с вариантами ответов."""
+        return db.query(TheoryQuestion).all()
+    
+    @staticmethod
+    def get_question_by_id(db: Session, question_id: int) -> Optional[TheoryQuestion]:
+        """Получить вопрос по ID."""
+        return db.query(TheoryQuestion).filter(TheoryQuestion.id == question_id).first()
+    
+    @staticmethod
+    def update_question(
+        db: Session, 
+        question_id: int, 
+        question_data: TheoryQuestionUpdate
+    ) -> Optional[TheoryQuestion]:
+        """
+        Обновить вопрос.
+        
+        Args:
+            db: Сессия БД
+            question_id: ID вопроса
+            question_data: Новые данные вопроса
+            
+        Returns:
+            Обновленный вопрос или None если не найден
+        """
+        question = db.query(TheoryQuestion).filter(TheoryQuestion.id == question_id).first()
+        if not question:
+            return None
+        
+        # Обновляем текст и тип вопроса
+        if question_data.question_text is not None:
+            question.question_text = question_data.question_text
+        if question_data.question_type is not None:
+            question.question_type = question_data.question_type
+        
+        # Если переданы новые варианты ответов - заменяем все
+        if question_data.answer_options is not None:
+            # Удаляем старые варианты
+            db.query(TheoryAnswerOption).filter(
+                TheoryAnswerOption.question_id == question_id
+            ).delete()
+            
+            # Добавляем новые варианты
+            for option_data in question_data.answer_options:
+                db_option = TheoryAnswerOption(
+                    question_id=question_id,
+                    option_text=option_data.option_text,
+                    is_correct=option_data.is_correct,
+                    option_order=option_data.option_order
+                )
+                db.add(db_option)
+        
+        db.commit()
+        db.refresh(question)
+        return question
+    
+    @staticmethod
+    def delete_question(db: Session, question_id: int) -> bool:
+        """
+        Удалить вопрос (варианты ответов удалятся автоматически через cascade).
+        
+        Args:
+            db: Сессия БД
+            question_id: ID вопроса
+            
+        Returns:
+            True если удален, False если не найден
+        """
+        question = db.query(TheoryQuestion).filter(TheoryQuestion.id == question_id).first()
+        if question:
+            db.delete(question)
+            db.commit()
+            return True
+        return False
+
+
+class TheoryTestSubmissionCRUD:
+    """
+    CRUD операции для результатов тестов по теории.
+    Использует таблицу submissions с is_test=TRUE.
+    
+    Структура данных:
+    - is_test = TRUE
+    - task_id = NULL (не нужен для теории)
+    - submitted_task = {"question_id": N, "selected_option_ids": [1, 2, 3]}
+    - errors = {"is_correct": true/false, "correct_option_ids": [1, 2]}
+    """
+    
+    @staticmethod
+    def create_submission(
+        db: Session,
+        user_id: int,
+        question_id: int,
+        selected_option_ids: List[int],
+        is_correct: bool,
+        correct_option_ids: List[int]
+    ) -> Submission:
+        """
+        Создать запись о результате ответа на вопрос теории.
+        
+        Args:
+            db: Сессия БД
+            user_id: ID пользователя
+            question_id: ID вопроса
+            selected_option_ids: ID выбранных вариантов
+            is_correct: Правильно ли ответил
+            correct_option_ids: ID правильных вариантов
+            
+        Returns:
+            Созданный submission
+        """
+        submission = Submission(
+            user_id=user_id,
+            task_id=None,  # Для теории task не нужен
+            is_test=True,
+            submitted_task={
+                "question_id": question_id,
+                "selected_option_ids": selected_option_ids
+            },
+            errors={
+                "is_correct": is_correct,
+                "correct_option_ids": correct_option_ids
+            }
+        )
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+        return submission
+    
+    @staticmethod
+    def get_user_test_submissions(db: Session, user_id: int) -> List[Submission]:
+        """Получить все submissions пользователя по теории (is_test=TRUE)."""
+        return db.query(Submission).filter(
+            Submission.user_id == user_id,
+            Submission.is_test == True
+        ).all()
+    
+    @staticmethod
+    def has_user_answered(db: Session, user_id: int) -> bool:
+        """Проверить, отвечал ли пользователь на тест по теории."""
+        count = db.query(Submission).filter(
+            Submission.user_id == user_id,
+            Submission.is_test == True
+        ).count()
+        return count > 0
+    
+    @staticmethod
+    def get_user_test_results(db: Session, user_id: int) -> Dict[str, Any]:
+        """
+        Получить результаты теста пользователя.
+        
+        Returns:
+            Dict с total_questions, correct_answers, incorrect_answers
+        """
+        submissions = db.query(Submission).filter(
+            Submission.user_id == user_id,
+            Submission.is_test == True
+        ).all()
+        
+        total = len(submissions)
+        correct = sum(1 for s in submissions if s.errors and s.errors.get("is_correct") == True)
+        incorrect = total - correct
+        
+        return {
+            "total_questions": total,
+            "correct_answers": correct,
+            "incorrect_answers": incorrect,
+            "score_percentage": round((correct / total * 100) if total > 0 else 0, 2)
+        }
