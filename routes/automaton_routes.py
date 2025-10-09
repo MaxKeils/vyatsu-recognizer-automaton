@@ -116,9 +116,19 @@ async def verify_automaton(
         return verification_result_for_user
         
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        # Безопасно возвращаем ошибки валидации данных
+        raise HTTPException(status_code=422, detail="Некорректные данные в запросе")
+    except HTTPException:
+        # Пробрасываем уже отформатированные HTTP ошибки
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Verification error: {str(e)}")
+        # Логируем internal error, но не отдаем детали клиенту
+        import logging
+        logging.error(f"Internal error in verify_automaton: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail="Внутренняя ошибка при проверке автомата. Обратитесь к администратору."
+        )
 
 
 @router.post("/verify-section", response_model=VerificationResult)
@@ -251,7 +261,11 @@ async def verify_section(
                 
                 # Если успешно - увеличиваем current_section
                 if not has_errors:
-                    StudentProgressCRUD.increment_current_section(db=db, progress_id=progress.id)
+                    StudentProgressCRUD.increment_current_section(
+                        db=db, 
+                        progress_id=progress.id, 
+                        section_number=request.section_number
+                    )
             
             # Отдаём только первую ошибку (если есть)
             errors_to_return = errors_user[:1] if errors_user else []
@@ -339,7 +353,11 @@ async def verify_section(
                 
                 # Если успешно - увеличиваем current_section
                 if result_full.success:
-                    StudentProgressCRUD.increment_current_section(db=db, progress_id=progress.id)
+                    StudentProgressCRUD.increment_current_section(
+                        db=db, 
+                        progress_id=progress.id, 
+                        section_number=request.section_number
+                    )
             
             # Отдаём только первую ошибку и первую подсказку
             errors_to_return = result_user.errors[:1] if result_user.errors else []
@@ -422,7 +440,11 @@ async def verify_section(
                 
                 # Если успешно - увеличиваем current_section и помечаем завершенным
                 if result_full.success:
-                    StudentProgressCRUD.increment_current_section(db=db, progress_id=progress.id)
+                    StudentProgressCRUD.increment_current_section(
+                        db=db, 
+                        progress_id=progress.id, 
+                        section_number=request.section_number
+                    )
                     StudentProgressCRUD.mark_completed(db=db, progress_id=progress.id)
             
             # Отдаём только первую ошибку и первую подсказку
@@ -441,8 +463,16 @@ async def verify_section(
             raise HTTPException(status_code=422, detail="Номер секции должен быть от 1 до 3")
             
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        # Безопасно возвращаем ошибки валидации
+        raise HTTPException(status_code=422, detail="Некорректные данные в запросе")
     except HTTPException:
+        # Пробрасываем уже отформатированные HTTP ошибки
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка проверки: {str(e)}")
+        # Логируем internal error, но не отдаем детали клиенту
+        import logging
+        logging.error(f"Internal error in verify_section: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail="Внутренняя ошибка при проверке автомата. Обратитесь к администратору."
+        )

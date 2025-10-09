@@ -315,11 +315,26 @@ class StudentProgressCRUD:
         return progress
     
     @staticmethod
-    def increment_current_section(db: Session, progress_id: int) -> Optional[StudentProgress]:
-        """Увеличивает current_section на 1."""
+    def increment_current_section(
+        db: Session, 
+        progress_id: int, 
+        section_number: int
+    ) -> Optional[StudentProgress]:
+        """
+        Увеличивает current_section только если section_number > current_section.
+        Это предотвращает повторное увеличение при переотправке уже пройденной секции.
+        
+        Args:
+            db: Сессия БД
+            progress_id: ID прогресса
+            section_number: Номер текущей секции
+            
+        Returns:
+            Обновленный прогресс или None
+        """
         progress = db.query(StudentProgress).filter(StudentProgress.id == progress_id).first()
-        if progress:
-            progress.current_section += 1
+        if progress and section_number > progress.current_section:
+            progress.current_section = section_number + 1
             db.commit()
             db.refresh(progress)
         return progress
