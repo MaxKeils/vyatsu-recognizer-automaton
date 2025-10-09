@@ -9,7 +9,7 @@ from database.schemas import (
     AdminLoginRequest, AdminLoginResponse,
     AdminChangePasswordRequest,
     VirtualVariantCreateRequest, VirtualVariantUpdateRequest,
-    VirtualVariantDetailResponse
+    VirtualVariantResponse
 )
 from service.auth_service import AuthService
 
@@ -94,10 +94,10 @@ async def change_admin_password(
     }
 
 
-@router.get("/variants", response_model=List[VirtualVariantDetailResponse])
+@router.get("/virtual-variants", response_model=List[VirtualVariantResponse])
 async def get_all_virtual_variants_admin(
     db: Session = Depends(get_db)
-) -> List[VirtualVariantDetailResponse]:
+) -> List[VirtualVariantResponse]:
     """
     Получить все виртуальные варианты (для админа).
     
@@ -113,11 +113,11 @@ async def get_all_virtual_variants_admin(
     return variants
 
 
-@router.post("/variants", response_model=VirtualVariantDetailResponse, status_code=201)
+@router.post("/virtual-variants", response_model=VirtualVariantResponse, status_code=201)
 async def create_virtual_variant(
     request: VirtualVariantCreateRequest,
     db: Session = Depends(get_db)
-) -> VirtualVariantDetailResponse:
+) -> VirtualVariantResponse:
     """
     Создать новый виртуальный вариант.
     
@@ -161,12 +161,12 @@ async def create_virtual_variant(
         )
 
 
-@router.put("/variants/{variant_id}", response_model=VirtualVariantDetailResponse)
+@router.put("/virtual-variants/{variant_id}", response_model=VirtualVariantResponse)
 async def update_virtual_variant(
     variant_id: int,
     request: VirtualVariantUpdateRequest,
     db: Session = Depends(get_db)
-) -> VirtualVariantDetailResponse:
+) -> VirtualVariantResponse:
     """
     Обновить виртуальный вариант.
     
@@ -221,7 +221,7 @@ async def update_virtual_variant(
         )
 
 
-@router.delete("/variants/{variant_id}", status_code=200)
+@router.delete("/virtual-variants/{variant_id}", status_code=200)
 async def delete_virtual_variant(
     variant_id: int,
     db: Session = Depends(get_db)

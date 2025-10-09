@@ -56,39 +56,3 @@ async def get_student_progress_for_task(
             detail="Прогресс не найден"
         )
     return progress
-
-
-router_variants = APIRouter(prefix="/variants", tags=["variants"])
-
-
-@router_variants.get("/", response_model=List[VirtualVariantResponse])
-async def get_virtual_variants(
-    db: Session = Depends(get_db)
-) -> List[VirtualVariantResponse]:
-    """
-    Получить список всех виртуальных вариантов для отображения студентам.
-    
-    Виртуальные варианты создаются на основе реальных заданий,
-    но их количество больше для создания иллюзии большего числа вариантов.
-    
-    Args:
-        db: Сессия БД
-        
-    Returns:
-        Список виртуальных вариантов с номерами для отображения
-    """
-    virtual_variants = VirtualVariantCRUD.get_all_virtual_variants(db)
-    
-    # Преобразуем в response model с описанием из реального задания
-    result = []
-    for vv in virtual_variants:
-        task = TaskCRUD.get_task_by_id(db, vv.real_task_id)
-        result.append({
-            "display_number": vv.display_number,
-            "description": task.description if task else None
-        })
-    
-    return result
-
-
-# Автогенерация вариантов убрана - используйте CRUD в /api/admin/variants

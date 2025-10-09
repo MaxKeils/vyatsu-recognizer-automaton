@@ -361,13 +361,3 @@ class VirtualVariantUpdateRequest(BaseModel):
     
     real_task_id: Optional[int] = Field(None, description="Новый ID реального задания")
     display_number: Optional[int] = Field(None, ge=1, description="Новый номер для отображения")
-
-
-class VirtualVariantDetailResponse(BaseModel):
-    """Детальная информация о виртуальном варианте (для админа)."""
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    real_task_id: int
-    display_number: int
-    created_at: datetime
