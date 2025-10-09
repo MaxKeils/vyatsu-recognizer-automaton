@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routes import automaton_routes
 from routes import configuration_routes, task_routes, user_routes, submission_routes
-from routes import progress_routes, admin_routes
+from routes import progress_routes, admin_routes, virtual_variant_routes
 
 # Кастомная схема для ошибок валидации
 validation_error_response = {
@@ -124,6 +124,7 @@ def create_application() -> FastAPI:
     app.include_router(progress_routes.router, prefix=settings.api_prefix)
     app.include_router(progress_routes.router_variants, prefix=settings.api_prefix)
     app.include_router(admin_routes.router, prefix=settings.api_prefix)
+    app.include_router(virtual_variant_routes.router, prefix=settings.api_prefix)
 
     return app
 

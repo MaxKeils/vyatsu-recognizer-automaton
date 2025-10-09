@@ -2,8 +2,6 @@ import hashlib
 
 
 class AuthService:
-    """Сервис для хеширования и проверки паролей администратора."""
-    
     SALT = "vyatsu_recognizer_automaton_2025_secure_salt_string_v1"
     
     @staticmethod
