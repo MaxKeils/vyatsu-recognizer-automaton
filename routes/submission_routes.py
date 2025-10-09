@@ -42,44 +42,44 @@ def get_submission_errors(submission_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/", response_model=SubmissionResponse)
-def create_submission(
-    submission_data: SubmissionRequest,
-    db: Session = Depends(get_db)
-):
-    user = UserCRUD.get_user_by_id(db, submission_data.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+# @router.post("/", response_model=SubmissionResponse)
+# def create_submission(
+#     submission_data: SubmissionRequest,
+#     db: Session = Depends(get_db)
+# ):
+#     user = UserCRUD.get_user_by_id(db, submission_data.user_id)
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
     
-    task = TaskCRUD.get_task_by_id(db, submission_data.task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+#     task = TaskCRUD.get_task_by_id(db, submission_data.task_id)
+#     if not task:
+#         raise HTTPException(status_code=404, detail="Task not found")
     
-    submission = SubmissionCRUD.create_submission(db, submission_data)
+#     submission = SubmissionCRUD.create_submission(db, submission_data)
     
-    try:
-        service = AutomatonService()
+#     try:
+#         service = AutomatonService()
         
-        from models.automaton import StudentAutomaton, ReferenceAutomaton
+#         from models.automaton import StudentAutomaton, ReferenceAutomaton
         
-        student_automaton = StudentAutomaton(**submission_data.submitted_task)
-        reference_automaton = ReferenceAutomaton(**task.task)
+#         student_automaton = StudentAutomaton(**submission_data.submitted_task)
+#         reference_automaton = ReferenceAutomaton(**task.task)
         
-        verification_result = service.verify_automatons(student_automaton, reference_automaton)
+#         verification_result = service.verify_automatons(student_automaton, reference_automaton)
         
-        errors = {
-            "is_correct": verification_result.is_correct,
-            "differences": verification_result.differences,
-            "hints": verification_result.hints
-        }
+#         errors = {
+#             "is_correct": verification_result.is_correct,
+#             "differences": verification_result.differences,
+#             "hints": verification_result.hints
+#         }
         
-        submission = SubmissionCRUD.update_submission_errors(db, submission.id, errors)
+#         submission = SubmissionCRUD.update_submission_errors(db, submission.id, errors)
         
-    except Exception as e:
-        error_info = {
-            "verification_error": str(e),
-            "is_correct": False
-        }
-        submission = SubmissionCRUD.update_submission_errors(db, submission.id, error_info)
+#     except Exception as e:
+#         error_info = {
+#             "verification_error": str(e),
+#             "is_correct": False
+#         }
+#         submission = SubmissionCRUD.update_submission_errors(db, submission.id, error_info)
     
-    return submission
+#     return submission
