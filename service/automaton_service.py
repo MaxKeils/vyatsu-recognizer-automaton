@@ -738,6 +738,116 @@ class AutomatonService():
         return True, ""
     
     @staticmethod
+    def verify_graph_only(
+        student: StudentAutomaton,
+        reference: ReferenceAutomaton,
+        test_length: int = 5
+    ) -> VerificationResult:
+        """
+        Проверяет только граф автомата (структуру и переходы), БЕЗ проверки Y-уравнения.
+        Используется для секции 2.
+        
+        Args:
+            student: Отправленный автомат студента
+            reference: Эталонный (правильный) автомат
+            test_length: Длина тестовых последовательностей
+            
+        Returns:
+            VerificationResult со статусом успеха и деталями ошибок
+        """
+        difficulty_mode: DifficultyMode = student.difficulty_mode
+        
+        # Шаг 1: Попытка найти валидное отображение состояний
+        mapping_found, state_mapping = AutomatonService.find_state_mapping(student, reference)
+        
+        if not mapping_found:
+            # Создаём диагностическое отображение для анализа ошибок
+            diagnostic_mapping = AutomatonService._create_diagnostic_mapping(student, reference)
+            
+            # Проверим структуру с этим отображением для получения детальных ошибок
+            _, graph_errors, graph_hints = AutomatonService._check_graph_structure(
+                student, reference, diagnostic_mapping, difficulty_mode
+            )
+            
+            # Формируем сообщение в зависимости от режима сложности
+            if difficulty_mode == DifficultyMode.HARD_MODE:
+                message = "Граф автомата неверный"
+                errors_to_show = []
+                hints_to_show = None
+            else:
+                message = "Граф автомата неверный"
+                errors_to_show = graph_errors[:AutomatonService._ERROR_LIMIT_DETAILED] if graph_errors else []
+                if len(graph_errors) > AutomatonService._ERROR_LIMIT_DETAILED:
+                    errors_to_show.append(f"... и ещё {len(graph_errors) - AutomatonService._ERROR_LIMIT_DETAILED} ошибок")
+                hints_to_show = graph_hints if graph_hints else None
+
+            return VerificationResult(
+                success=False,
+                message=message,
+                errors=errors_to_show,
+                hints=hints_to_show
+            )
+        
+        # Шаг 2: Генерация тестовых последовательностей
+        test_sequences = AutomatonService.generate_input_sequences(test_length)
+        
+        # Шаг 3: Запуск симуляций и сравнение выходов
+        error_messages: List[str] = []
+        
+        for _, input_seq in enumerate(test_sequences):
+            ref_outputs, _ = AutomatonService.simulate_automaton(
+                reference.transitions,
+                reference.initial_state,
+                input_seq
+            )
+            
+            student_outputs, _ = AutomatonService.simulate_automaton(
+                student.transitions,
+                student.initial_state,
+                input_seq
+            )
+            
+            error_limit = AutomatonService._get_error_limit(difficulty_mode)
+            
+            for step, (ref_out, stud_out) in enumerate(zip(ref_outputs, student_outputs)):
+                if ref_out != stud_out:
+                    input_str = AutomatonService._format_input_sequence(input_seq, step + 1)
+                    
+                    if difficulty_mode == DifficultyMode.HARD_MODE:
+                        error_messages.append("Обнаружена ошибка в выходной последовательности")
+                    elif difficulty_mode == DifficultyMode.MEDIUM_MODE:
+                        error_messages.append(
+                            f"Ошибка на шаге {step + 1}, вход: {input_str}"
+                        )
+                    else:
+                        error_messages.append(
+                            f"Ошибка на шаге {step + 1}, вход: {input_str}. "
+                            f"Получено: выход={stud_out}, ожидается: выход={ref_out}"
+                        )
+                    
+                    if len(error_messages) >= error_limit:
+                        break
+            
+            if len(error_messages) >= error_limit:
+                break
+        
+        if error_messages:
+            return VerificationResult(
+                success=False,
+                message="Граф автомата работает неправильно",
+                errors=[] if difficulty_mode == DifficultyMode.HARD_MODE else error_messages,
+                hints=None
+            )
+        
+        # Граф верный!
+        return VerificationResult(
+            success=True,
+            message="Граф автомата верный!",
+            errors=[],
+            hints=None
+        )
+
+    @staticmethod
     def verify_automaton(
         student: StudentAutomaton,
         reference: ReferenceAutomaton,

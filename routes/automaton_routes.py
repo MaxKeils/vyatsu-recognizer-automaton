@@ -168,6 +168,16 @@ async def verify_section(
         raise HTTPException(status_code=404, detail="Виртуальный вариант не найден")
     
     try:
+        # Получаем или создаем прогресс студента
+        progress = StudentProgressCRUD.get_progress(db, request.user_id, task.id)
+        if not progress:
+            progress = StudentProgressCRUD.create_progress(
+                db=db,
+                user_id=request.user_id,
+                task_id=task.id,
+                difficulty_mode=config.difficulty_mode
+            )
+        
         # Создаем ReferenceAutomaton из задания
         reference_data = task.task.copy()
         reference_data['variant'] = request.virtual_variant_id
@@ -177,17 +187,25 @@ async def verify_section(
         # Для разных секций проверяем разные части автомата
         if request.section_number == 1:
             # Секция 1: только состояния 
-            # Просто проверяем базовые правила
-            errors = []
-            hints = []
+            # Проверяем базовые правила (для user's difficulty_mode)
+            errors_user = []
+            hints_user = []
+            
+            # Проверяем с полными ошибками (для БД)
+            errors_full = []
+            hints_full = []
             
             # Проверка количества состояний
             has_errors = False
             if len(request.data.state_codes) != len(reference_automaton.state_codes):
                 has_errors = True
+                # Для пользователя
                 if difficulty_mode_int >= 2:
-                    errors.append("Неверное количество состояний")
-                    hints.append(f"Ожидается {len(reference_automaton.state_codes)} состояний, получено {len(request.data.state_codes)}")
+                    errors_user.append("Неверное количество состояний")
+                    hints_user.append(f"Ожидается {len(reference_automaton.state_codes)} состояний, получено {len(request.data.state_codes)}")
+                # Полная информация для БД
+                errors_full.append("Неверное количество состояний")
+                hints_full.append(f"Ожидается {len(reference_automaton.state_codes)} состояний, получено {len(request.data.state_codes)}")
             
             # Проверка начального состояния (по позиции, не по значению)
             ref_initial_index = reference_automaton.state_codes.index(reference_automaton.initial_state) if reference_automaton.initial_state in reference_automaton.state_codes else -1
@@ -195,54 +213,144 @@ async def verify_section(
             
             if ref_initial_index != stud_initial_index:
                 has_errors = True
+                # Для пользователя
                 if difficulty_mode_int >= 2:
-                    errors.append("Неверное начальное состояние")
-                    hints.append(f"Начальное состояние должно быть на позиции {ref_initial_index}")
+                    errors_user.append("Неверное начальное состояние")
+                    hints_user.append(f"Начальное состояние должно быть на позиции {ref_initial_index}")
+                # Полная информация для БД
+                errors_full.append("Неверное начальное состояние")
+                hints_full.append(f"Начальное состояние должно быть на позиции {ref_initial_index}")
             
+            # Сохраняем submission с полными ошибками
+            section_data_dict = request.data.model_dump(exclude_none=True)
+            errors_data_full = {
+                "success": not has_errors,
+                "message": "Секция 1 проверена успешно" if not has_errors else "Секция 1 содержит ошибки",
+                "errors": errors_full,
+                "hints": hints_full if hints_full else []
+            }
+            SubmissionCRUD.create_section_submission(
+                db=db,
+                task_id=request.virtual_variant_id,
+                user_id=request.user_id,
+                progress_id=progress.id if progress else None,
+                section_number=request.section_number,
+                difficulty_mode=config.difficulty_mode,
+                submitted_data=section_data_dict,
+                errors_data=errors_data_full
+            )
+            
+            # ВСЕГДА сохраняем данные секции (даже при ошибке) для восстановления
+            if progress:
+                StudentProgressCRUD.update_section_data(
+                    db=db,
+                    progress_id=progress.id,
+                    section_number=request.section_number,
+                    section_data=section_data_dict
+                )
+                
+                # Если успешно - увеличиваем current_section
+                if not has_errors:
+                    StudentProgressCRUD.increment_current_section(db=db, progress_id=progress.id)
+            
+            # Отдаём только первую ошибку (если есть)
+            errors_to_return = errors_user[:1] if errors_user else []
+            hints_to_return = hints_user[:1] if hints_user else None
+            
+            # Возвращаем пользователю результат с его difficulty_mode
             return VerificationResult(
                 success=not has_errors,
                 message="Секция 1 проверена успешно" if not has_errors else "Секция 1 содержит ошибки",
-                errors=errors,
-                hints=hints if hints else None
+                errors=errors_to_return,
+                hints=hints_to_return
             )
             
         elif request.section_number == 2:
-            # Секция 2: состояния + переходы (проверка графа)
+            # Секция 2: состояния + переходы (проверка ТОЛЬКО графа, БЕЗ Y-уравнения)
             if not request.data.transitions:
                 raise HTTPException(status_code=400, detail="Для секции 2 требуется поле transitions")
             
-            # Создаем StudentAutomaton с фиктивным y (для секции 2 не проверяем y)
-            # Используем первое состояние + первый вход как заглушку
+            # Создаем StudentAutomaton с фиктивным y (не используется в verify_graph_only)
             dummy_y = [f"{request.data.state_codes[0]}00"] if request.data.state_codes else ["0000"]
-            student_data = {
+            
+            # 1. Проверка ТОЛЬКО графа с user's difficulty_mode (для ответа пользователю)
+            student_data_user = {
                 "student_id": str(request.user_id),
                 "variant": request.virtual_variant_id,
                 "difficulty_mode": difficulty_mode_int,
                 "state_codes": request.data.state_codes or [],
                 "initial_state": request.data.initial_state or "",
                 "transitions": request.data.transitions or [],
-                "y": dummy_y  # Фиктивное значение для валидации модели
+                "y": dummy_y
             }
-            student = StudentAutomaton(**student_data)
-            
-            # Используем метод verify_automaton но анализируем только граф
-            result = AutomatonService.verify_automaton(
-                student=student,
+            student_user = StudentAutomaton(**student_data_user)
+            result_user = AutomatonService.verify_graph_only(
+                student=student_user,
                 reference=reference_automaton,
-                test_length=3  # Короче для секции
+                test_length=3
             )
             
-            # Результат уже учитывает difficulty_mode внутри AutomatonService
-            # Фильтруем только ошибки графа (не Y-уравнения)
-            graph_errors = [e for e in result.errors if "Y-уравнение" not in e and "уравнение" not in e.lower()]
-            graph_hints = result.hints if result.hints else None
+            # 2. Проверка ТОЛЬКО графа с EASY_MODE (для БД)
+            student_data_full = {
+                "student_id": str(request.user_id),
+                "variant": request.virtual_variant_id,
+                "difficulty_mode": 3,  # EASY_MODE
+                "state_codes": request.data.state_codes or [],
+                "initial_state": request.data.initial_state or "",
+                "transitions": request.data.transitions or [],
+                "y": dummy_y
+            }
+            student_full = StudentAutomaton(**student_data_full)
+            result_full = AutomatonService.verify_graph_only(
+                student=student_full,
+                reference=reference_automaton,
+                test_length=3
+            )
             
-            # Проверяем success на основе результата от AutomatonService
+            # Теперь не нужна фильтрация - verify_graph_only не проверяет Y-уравнение!
+            
+            # Сохраняем submission с полными ошибками
+            section_data_dict = request.data.model_dump(exclude_none=True)
+            errors_data_full = {
+                "success": result_full.success,
+                "message": "Секция 2 проверена успешно" if result_full.success else "Секция 2 содержит ошибки",
+                "errors": result_full.errors,
+                "hints": result_full.hints if result_full.hints else []
+            }
+            SubmissionCRUD.create_section_submission(
+                db=db,
+                task_id=request.virtual_variant_id,
+                user_id=request.user_id,
+                progress_id=progress.id if progress else None,
+                section_number=request.section_number,
+                difficulty_mode=config.difficulty_mode,
+                submitted_data=section_data_dict,
+                errors_data=errors_data_full
+            )
+            
+            # ВСЕГДА сохраняем данные секции (даже при ошибке) для восстановления
+            if progress:
+                StudentProgressCRUD.update_section_data(
+                    db=db,
+                    progress_id=progress.id,
+                    section_number=request.section_number,
+                    section_data=section_data_dict
+                )
+                
+                # Если успешно - увеличиваем current_section
+                if result_full.success:
+                    StudentProgressCRUD.increment_current_section(db=db, progress_id=progress.id)
+            
+            # Отдаём только первую ошибку и первую подсказку
+            errors_to_return = result_user.errors[:1] if result_user.errors else []
+            hints_to_return = result_user.hints[:1] if result_user.hints else None
+            
+            # Возвращаем пользователю результат с его difficulty_mode
             return VerificationResult(
-                success=result.success,
-                message="Секция 2 проверена успешно" if result.success else "Секция 2 содержит ошибки",
-                errors=graph_errors,
-                hints=graph_hints
+                success=result_user.success,
+                message="Секция 2 проверена успешно" if result_user.success else "Секция 2 содержит ошибки",
+                errors=errors_to_return,
+                hints=hints_to_return
             )
             
         elif request.section_number == 3:
@@ -250,8 +358,8 @@ async def verify_section(
             if not request.data.y_equation:
                 raise HTTPException(status_code=400, detail="Для секции 3 требуется поле y_equation")
             
-            # Создаем полный StudentAutomaton
-            student_data = {
+            # 1. Проверка с user's difficulty_mode (для ответа пользователю)
+            student_data_user = {
                 "student_id": str(request.user_id),
                 "variant": request.virtual_variant_id,
                 "difficulty_mode": difficulty_mode_int,
@@ -260,16 +368,74 @@ async def verify_section(
                 "transitions": request.data.transitions or [],
                 "y": request.data.y_equation or []
             }
-            student = StudentAutomaton(**student_data)
-            
-            # Полная проверка автомата
-            result = AutomatonService.verify_automaton(
-                student=student,
+            student_user = StudentAutomaton(**student_data_user)
+            result_user = AutomatonService.verify_automaton(
+                student=student_user,
                 reference=reference_automaton,
                 test_length=5
             )
             
-            return result
+            # 2. Проверка с EASY_MODE (для БД)
+            student_data_full = {
+                "student_id": str(request.user_id),
+                "variant": request.virtual_variant_id,
+                "difficulty_mode": 3,  # EASY_MODE
+                "state_codes": request.data.state_codes or [],
+                "initial_state": request.data.initial_state or "",
+                "transitions": request.data.transitions or [],
+                "y": request.data.y_equation or []
+            }
+            student_full = StudentAutomaton(**student_data_full)
+            result_full = AutomatonService.verify_automaton(
+                student=student_full,
+                reference=reference_automaton,
+                test_length=5
+            )
+            
+            # Сохраняем submission с полными ошибками
+            section_data_dict = request.data.model_dump(exclude_none=True)
+            errors_data_full = {
+                "success": result_full.success,
+                "message": "Секция 3 проверена успешно. Автомат полностью корректен!" if result_full.success else "Секция 3 содержит ошибки",
+                "errors": result_full.errors,
+                "hints": result_full.hints if result_full.hints else []
+            }
+            SubmissionCRUD.create_section_submission(
+                db=db,
+                task_id=request.virtual_variant_id,
+                user_id=request.user_id,
+                progress_id=progress.id if progress else None,
+                section_number=request.section_number,
+                difficulty_mode=config.difficulty_mode,
+                submitted_data=section_data_dict,
+                errors_data=errors_data_full
+            )
+            
+            # ВСЕГДА сохраняем данные секции (даже при ошибке) для восстановления
+            if progress:
+                StudentProgressCRUD.update_section_data(
+                    db=db,
+                    progress_id=progress.id,
+                    section_number=request.section_number,
+                    section_data=section_data_dict
+                )
+                
+                # Если успешно - увеличиваем current_section и помечаем завершенным
+                if result_full.success:
+                    StudentProgressCRUD.increment_current_section(db=db, progress_id=progress.id)
+                    StudentProgressCRUD.mark_completed(db=db, progress_id=progress.id)
+            
+            # Отдаём только первую ошибку и первую подсказку
+            errors_to_return = result_user.errors[:1] if result_user.errors else []
+            hints_to_return = result_user.hints[:1] if result_user.hints else None
+            
+            # Возвращаем пользователю результат с его difficulty_mode
+            return VerificationResult(
+                success=result_user.success,
+                message="Секция 3 проверена успешно. Автомат полностью корректен!" if result_user.success else "Секция 3 содержит ошибки",
+                errors=errors_to_return,
+                hints=hints_to_return
+            )
             
         else:
             raise HTTPException(status_code=422, detail="Номер секции должен быть от 1 до 3")

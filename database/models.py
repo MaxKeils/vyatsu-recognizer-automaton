@@ -53,6 +53,7 @@ class StudentProgress(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
     current_section = Column(Integer, nullable=False, default=1)
+    difficulty_mode = Column(String, nullable=True)  # Режим сложности при создании прогресса
     section_1_data = Column(JSON, nullable=True)  # states, initial_state
     section_2_data = Column(JSON, nullable=True)  # transitions
     section_3_data = Column(JSON, nullable=True)  # y_equation

@@ -197,6 +197,47 @@ class SubmissionCRUD:
         return submission
     
     @staticmethod
+    def create_section_submission(
+        db: Session,
+        task_id: int,
+        user_id: int,
+        progress_id: Optional[int],
+        section_number: int,
+        difficulty_mode: str,
+        submitted_data: Dict[str, Any],
+        errors_data: Dict[str, Any]
+    ) -> Submission:
+        """
+        Создать submission для секции с полными ошибками.
+        
+        Args:
+            db: Сессия БД
+            task_id: ID задания (виртуальный вариант)
+            user_id: ID пользователя
+            progress_id: ID прогресса студента (может быть None)
+            section_number: Номер секции (1, 2, 3)
+            difficulty_mode: Режим сложности
+            submitted_data: Отправленные данные секции
+            errors_data: Полная информация об ошибках (с EASY_MODE)
+            
+        Returns:
+            Созданный Submission
+        """
+        submission = Submission(
+            task_id=task_id,
+            user_id=user_id,
+            progress_id=progress_id,
+            section_number=section_number,
+            difficulty_mode=difficulty_mode,
+            submitted_task=submitted_data,
+            errors=errors_data
+        )
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+        return submission
+    
+    @staticmethod
     def update_submission_errors(
         db: Session, 
         submission_id: int, 
@@ -233,12 +274,14 @@ class StudentProgressCRUD:
     def create_progress(
         db: Session,
         user_id: int,
-        task_id: int
+        task_id: int,
+        difficulty_mode: Optional[str] = None
     ) -> StudentProgress:
         progress = StudentProgress(
             user_id=user_id,
             task_id=task_id,
-            current_section=1
+            current_section=1,
+            difficulty_mode=difficulty_mode
         )
         db.add(progress)
         db.commit()
@@ -269,6 +312,16 @@ class StudentProgressCRUD:
         
         db.commit()
         db.refresh(progress)
+        return progress
+    
+    @staticmethod
+    def increment_current_section(db: Session, progress_id: int) -> Optional[StudentProgress]:
+        """Увеличивает current_section на 1."""
+        progress = db.query(StudentProgress).filter(StudentProgress.id == progress_id).first()
+        if progress:
+            progress.current_section += 1
+            db.commit()
+            db.refresh(progress)
         return progress
     
     @staticmethod
