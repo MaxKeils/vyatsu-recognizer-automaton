@@ -71,14 +71,14 @@ class Submission(Base):
     __tablename__ = "submissions"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)  # NULL для теоретических тестов (is_test=TRUE)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     progress_id = Column(Integer, ForeignKey("student_progress.id"), nullable=True)
     section_number = Column(Integer, nullable=True)  # Номер секции (1, 2, 3)
     difficulty_mode = Column(String, nullable=True)
-    is_test = Column(Boolean, nullable=False, default=False)  # Для будущего функционала тестов
-    submitted_task = Column(JSON, nullable=False)  # Student automaton structure
-    errors = Column(JSON, nullable=True)  # Verification errors
+    is_test = Column(Boolean, nullable=False, default=False)  # TRUE для теоретических тестов, FALSE для автоматов
+    submitted_task = Column(JSON, nullable=False)  # Student automaton structure или ответ на вопрос теории
+    errors = Column(JSON, nullable=True)  # Verification errors или результат проверки вопроса
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     
     # Relationships

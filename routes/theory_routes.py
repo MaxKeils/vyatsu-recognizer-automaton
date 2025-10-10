@@ -84,6 +84,7 @@ def submit_theory_test(
         results = []
         correct_count = 0
         incorrect_count = 0
+        submissions_to_create = []
         
         # Проверяем каждый ответ
         for answer in test_data.answers:
@@ -112,15 +113,13 @@ def submit_theory_test(
             else:
                 incorrect_count += 1
             
-            # Сохраняем результат в БД
-            TheoryTestSubmissionCRUD.create_submission(
-                db=db,
-                user_id=test_data.user_id,
-                question_id=answer.question_id,
-                selected_option_ids=answer.selected_option_ids,
-                is_correct=is_correct,
-                correct_option_ids=correct_option_ids
-            )
+            # Подготавливаем данные для сохранения (пока не коммитим)
+            submissions_to_create.append({
+                "question_id": answer.question_id,
+                "selected_option_ids": answer.selected_option_ids,
+                "is_correct": is_correct,
+                "correct_option_ids": correct_option_ids
+            })
             
             # Добавляем детали в результат
             results.append(QuestionResultDetail(
@@ -131,6 +130,17 @@ def submit_theory_test(
                 selected_option_ids=answer.selected_option_ids,
                 correct_option_ids=correct_option_ids
             ))
+        
+        # Все проверки прошли успешно - теперь сохраняем ВСЕ ответы одной транзакцией
+        for submission_data in submissions_to_create:
+            TheoryTestSubmissionCRUD.create_submission(
+                db=db,
+                user_id=test_data.user_id,
+                question_id=submission_data["question_id"],
+                selected_option_ids=submission_data["selected_option_ids"],
+                is_correct=submission_data["is_correct"],
+                correct_option_ids=submission_data["correct_option_ids"]
+            )
         
         total_questions = len(test_data.answers)
         score_percentage = round((correct_count / total_questions * 100) if total_questions > 0 else 0, 2)
